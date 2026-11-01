@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Rune Phone
+GenericName=Phone and Messages
+Comment=Calls and texts from your phone, over Bluetooth
+Exec=rune-phone
+Icon=rune-phone
+Terminal=false
+Categories=Network;Telephony;
+Keywords=phone;calls;sms;messages;text;android;bluetooth;
+StartupWMClass=rune-phone
+StartupNotify=true

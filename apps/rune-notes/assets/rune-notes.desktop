@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Rune Notes
+GenericName=Notes
+Comment=Notes as Markdown files in folders
+Exec=rune-notes
+Icon=rune-notes
+Terminal=false
+Categories=Office;Utility;TextEditor;
+Keywords=notes;markdown;folders;writing;
+StartupWMClass=rune-notes
+StartupNotify=true

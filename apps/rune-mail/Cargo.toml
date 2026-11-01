@@ -1,0 +1,46 @@
+[package]
+name = "rune-mail"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+# Rune has no releases yet; apps pin a `dev` rev (see Rune's AGENTS.md).
+rune = { git = "https://github.com/anomalyco/rune", rev = "f022a27c04013abbda6771b08bfc61fad7529111", features = ["native-file-dialog"] }
+ureq = { version = "2", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+chrono-tz = "0.10"
+html2text = "0.12"
+dirs = "5"
+scraper = "0.29"
+ego-tree = "0.11"
+base64 = "0.22"
+roxmltree = "0.20"
+url = "2"
+fastrand = "2"
+# SQLCipher (an encrypted SQLite), with its own OpenSSL so no system packages are needed.
+rusqlite = { version = "0.41", features = ["bundled-sqlcipher-vendored-openssl"] }
+flate2 = "1"
+getrandom = "0.3"
+keyring = "4"
+imap = { version = "3.0.0-alpha.15", default-features = false, features = ["rustls-tls"] }
+# The IMAP connection is opened here, to set timeouts on it (imap's builder can't).
+rustls-connector = "0.19"
+lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "rustls-tls", "builder", "hostname"] }
+mail-parser = "1"
+# Mail HTML is laid out and painted by Blitz (HTML/CSS: stylo, taffy, parley) on a thread of
+# its own, into bitmaps the reader shows. Betas break their API between releases: pinned exactly.
+blitz-dom = { version = "=0.3.0-beta.4", default-features = false, features = ["system-fonts", "woff", "svg", "floats"] }
+blitz-html = "=0.3.0-beta.4"
+blitz-paint = { version = "=0.3.0-beta.4", default-features = false, features = ["svg"] }
+blitz-traits = "=0.3.0-beta.4"
+anyrender = "=0.14.0"
+anyrender_vello_cpu = "=0.18.0"
+# System fonts for Blitz, found through fontconfig loaded at run time (no headers to build).
+fontique = { version = "0.12", features = ["fontconfig-dlopen"] }
+bytes = "1"
+# The formats mail images come in: Blitz decodes with `image`, which it pulls in without codecs.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp", "ico"] }
+imap-proto = "0.16"

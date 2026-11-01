@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Rune's dark app icon: a plain tile and one line glyph (Lucide, ISC) in the app's colour. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2c2c2e"/>
+      <stop offset="1" stop-color="#1c1c1e"/>
+    </linearGradient>
+  </defs>
+  <rect x="32" y="32" width="448" height="448" rx="104" fill="url(#tile)"/>
+  <rect x="33.5" y="33.5" width="445" height="445" rx="102.5" fill="none" stroke="#ffffff" stroke-opacity="0.10" stroke-width="3"/>
+  <g transform="translate(136 136) scale(10)" color="#30d158" fill="none" stroke="currentColor"
+     stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/>
+  </g>
+</svg>

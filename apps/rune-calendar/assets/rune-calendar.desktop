@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Rune Calendar
+GenericName=Calendar
+Comment=Day, week and month views of your CalDAV calendars
+Exec=rune-calendar
+Icon=rune-calendar
+Terminal=false
+Categories=Office;Calendar;
+Keywords=calendar;events;caldav;fastmail;google;icloud;
+StartupWMClass=rune-calendar
+StartupNotify=true

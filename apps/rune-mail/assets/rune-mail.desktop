@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Rune Mail
+GenericName=Mail
+Comment=Read and write mail from Fastmail, Gmail and other accounts
+Exec=rune-mail
+Icon=rune-mail
+Terminal=false
+Categories=Network;Email;
+Keywords=mail;email;fastmail;gmail;imap;
+StartupWMClass=rune-mail
+StartupNotify=true

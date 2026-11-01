@@ -1,0 +1,33 @@
+[package]
+name = "rune-passwords"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+# Rune has no releases yet; apps pin a `dev` rev (see Rune's AGENTS.md). Same rev as Rune Mail.
+rune = { git = "https://github.com/anomalyco/rune", rev = "f022a27c04013abbda6771b08bfc61fad7529111" }
+ureq = { version = "2", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+dirs = "5"
+base64 = "0.22"
+url = "2"
+keyring = "4"
+getrandom = "0.3"
+# Bitwarden's vault crypto: the master key (PBKDF2 or Argon2id), its HKDF stretch, AES-256-CBC
+# with HMAC-SHA256, and RSA-OAEP for organisation keys.
+aes = "0.8"
+cbc = { version = "0.1", features = ["alloc"] }
+hmac = "0.12"
+sha1 = "0.10"
+sha2 = "0.10"
+pbkdf2 = "0.12"
+hkdf = "0.12"
+argon2 = "0.5"
+rsa = "0.9"
+zeroize = { version = "1", features = ["derive"] }
+uuid = { version = "1", features = ["v4"] }
+# Password strength the way Bitwarden and 1Password judge it.
+zxcvbn = "3"
