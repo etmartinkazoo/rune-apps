@@ -28,7 +28,8 @@ done
 for a in $apps; do
     [ -d "apps/$a" ] || { echo "No app called ${a#rune-} (apps/$a)" >&2; exit 1; }
 done
-packages=$(for a in $apps; do printf -- '-p %s ' "$a"; done)
+# Always the whole workspace, even for one app: cargo turns on dependencies' features per build,
+# so building one app alone would rebuild Rune with other features and throw the cached build away.
 
 if [ -n "$remote" ]; then
     dir="${RUNE_REMOTE_DIR:-Projects/rune-apps}"
@@ -39,14 +40,14 @@ if [ -n "$remote" ]; then
         echo "Note: $remote builds origin/$branch; changes here that aren't pushed aren't in it." >&2
     fi
     echo "Building on $remote…"
-    ssh "$remote" "set -e; cd $dir && git fetch -q origin && git checkout -q $branch && git pull -q --ff-only origin $branch && $cargo build --release $packages"
+    ssh "$remote" "set -e; cd $dir && git fetch -q origin && git checkout -q $branch && git pull -q --ff-only origin $branch && $cargo build --release --workspace"
     built=$(mktemp -d)
     trap 'rm -rf "$built"' EXIT
     for a in $apps; do
         scp -q "$remote:$dir/target/release/$a" "$built/$a"
     done
 else
-    cargo build --release $packages
+    cargo build --release --workspace
     built=target/release
 fi
 
