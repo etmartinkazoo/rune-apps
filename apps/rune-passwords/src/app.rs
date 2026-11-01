@@ -173,6 +173,8 @@ pub struct App {
     pub settings_open: bool,
     pub status: Option<(String, f64)>,
     pub clock: f64,
+    /// The wall-clock second the verification code on screen was last drawn for.
+    pub code_second: u64,
     /// A delete being asked about.
     pub confirm: Option<Confirm>,
     /// A list row slid open by a two-finger swipe.
@@ -219,6 +221,7 @@ pub fn init() -> App {
         settings_open: false,
         status: None,
         clock: 0.0,
+        code_second: 0,
         confirm: None,
         swipe: None,
         icons: crate::icons::Icons::default(),
@@ -272,10 +275,15 @@ pub fn poll(s: &mut App, clock: f64, tx: &mut Tx) -> bool {
             _ => tx.wake_after(idle.min(Duration::from_secs(30))),
         }
     }
-    // A verification code on screen counts down.
+    // A verification code on screen counts down: redrawn once a second, not on every frame
+    // (poll runs each frame, and true rebuilds the whole view).
     if s.phase == Phase::Ready && s.selected_item().is_some_and(|i| !i.totp.is_empty()) {
-        tx.wake_after(Duration::from_secs(1));
-        changed = true;
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+        if now.as_secs() != s.code_second {
+            s.code_second = now.as_secs();
+            changed = true;
+        }
+        tx.wake_after(Duration::from_secs(1) - Duration::from_nanos(u64::from(now.subsec_nanos())));
     }
     changed
 }
