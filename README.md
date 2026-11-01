@@ -37,3 +37,23 @@ It needs a checkout at `~/Projects/rune-apps` and cargo through mise; `RUNE_REMO
 binaries to run here.
 
 Every app has headless scenes for screenshots, e.g. `rune-passwords --scene demo --snap out.png`.
+
+## Developing on Beebox
+
+Beebox (Ubuntu, over Tailscale) is where these are developed and built; the checkout is
+`~/Projects/rune-apps`, with Rust from mise (`mise use -g rust@latest`). Its system packages:
+
+```sh
+sudo apt-get install -y libxkbcommon-dev libwayland-dev pkg-config mold clang mesa-vulkan-drivers
+```
+
+Long builds run detached, so a dropped SSH connection doesn't stop them:
+
+```sh
+nohup cargo build --release --workspace > ~/rune-build.log 2>&1 &
+nohup cargo test --workspace > ~/rune-test.log 2>&1 &
+tail -f ~/rune-test.log
+```
+
+Then, on the laptop, `scripts/install.sh --remote beebox` installs what Beebox built from the
+pushed branch.
