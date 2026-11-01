@@ -16,6 +16,21 @@ Rune and the other dependencies build once for all of them.
 Linux needs the XKB and Wayland development packages (`libxkbcommon-dev libwayland-dev
 pkg-config` on Ubuntu, `libxkbcommon-devel wayland-devel pkgconf` on Fedora).
 
+**Ubuntu/Debian:**
+```sh
+sudo apt-get install -y libxkbcommon-dev libwayland-dev pkg-config mold clang mesa-vulkan-drivers libssl-dev perl make gcc
+```
+
+**Fedora 45:**
+```sh
+sudo dnf install -y libxkbcommon-devel wayland-devel pkgconf-pkg-config mold clang mesa-vulkan-drivers openssl-devel perl perl-IPC-Cmd perl-FindBin make gcc
+```
+
+If `openssl-sys` still tries to build OpenSSL from source, use the system OpenSSL:
+
+```sh
+OPENSSL_NO_VENDOR=1 cargo build --release
+```
 ```sh
 cargo build --release                 # every app, into target/release
 cargo run -p rune-passwords           # one app
