@@ -1,5 +1,5 @@
 [workspace]
-members = ["apps/*"]
+members = ["apps/*", "crates/*"]
 resolver = "3"
 
 # Dependencies (Rune above all) build optimised even in debug, so the apps run smoothly while

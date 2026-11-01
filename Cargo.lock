@@ -4429,6 +4429,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "rune-suite"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "dirs",
+ "keyring",
+ "roxmltree 0.20.0",
+ "rune",
+ "serde",
+ "serde_json",
+ "ureq",
+ "url",
+]
+
+[[package]]
 name = "rusqlite"
 version = "0.41.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
