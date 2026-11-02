@@ -320,6 +320,10 @@ struct Kept {
     zoom: f32,
     tiles: Vec<Pixels>,
     painted: Vec<bool>,
+    /// Where the selection was started and dragged to, as heights down the page in points:
+    /// what a drag changes lies between where it was and where it's dragged, so only those
+    /// tiles need painting again.
+    sel: Option<(f32, f32)>,
 }
 
 impl Kept {
@@ -407,11 +411,12 @@ impl Thread {
                     Err(_) => return,
                 },
             };
-            // Only the newest hover and the newest layout of a message matter.
+            // Only the newest hover, drag of a selection and layout of a message matter: a drag
+            // sends a point per pointer move, faster than a long message repaints.
             let superseded = match &job {
-                Job::Pointer { uid, kind: Pointer::Hover, .. } => {
+                Job::Pointer { uid, kind: kind @ (Pointer::Hover | Pointer::SelectTo), .. } => {
                     queue.extend(rx.try_iter());
-                    queue.iter().any(|j| matches!(j, Job::Pointer { uid: u, kind: Pointer::Hover, .. } if u == uid))
+                    queue.iter().any(|j| matches!(j, Job::Pointer { uid: u, kind: k, .. } if u == uid && k == kind))
                 }
                 Job::Show { uid, .. } => {
                     queue.extend(rx.try_iter());
@@ -522,7 +527,7 @@ impl Thread {
         };
         let mut doc = HtmlDocument::from_html(&standard_doctype(html), config);
         legacy_attributes(&mut doc);
-        let mut k = Kept { html: html.clone(), look, doc, size: (0.0, 0.0), zoom: 1.0, tiles: Vec::new(), painted: Vec::new() };
+        let mut k = Kept { html: html.clone(), look, doc, size: (0.0, 0.0), zoom: 1.0, tiles: Vec::new(), painted: Vec::new(), sel: None };
         lay_out(&mut k);
         k
     }
@@ -565,8 +570,9 @@ impl Thread {
                 let had = k.doc.get_selected_text().is_some_and(|t| !t.is_empty());
                 k.doc.clear_text_selection();
                 if had {
-                    repaint(k);
+                    repaint_selection(k);
                 }
+                k.sel = None;
                 if let Some(href) = link_at(&k.doc, x, y) {
                     self.send(Done::Click { href });
                 }
@@ -574,11 +580,23 @@ impl Thread {
             Pointer::SelectFrom => {
                 if let Some((node, offset)) = k.doc.find_text_position(x, y) {
                     k.doc.set_text_selection(node, offset, node, offset);
+                    // A new drag replaces the last selection: its highlight goes.
+                    if k.sel.is_some() {
+                        repaint_selection(k);
+                    }
+                    k.sel = Some((y * k.zoom, y * k.zoom));
                 }
             }
             Pointer::SelectTo => {
                 if k.doc.extend_text_selection_to_point(x, y) {
-                    repaint(k);
+                    let to = y * k.zoom;
+                    match k.sel {
+                        Some((from, was)) => {
+                            repaint_between(k, was.min(to), was.max(to));
+                            k.sel = Some((from, to));
+                        }
+                        None => repaint(k),
+                    }
                 }
             }
         }
@@ -603,6 +621,27 @@ fn repaint(k: &mut Kept) {
     let painted: Vec<usize> = (0..k.painted.len()).filter(|&i| k.painted[i]).collect();
     for i in painted {
         k.paint(i);
+    }
+}
+
+/// Repaints the painted tiles of rows reaching from `top` to `bottom` points down the page
+/// (and a line either side, for the lines those points fall in).
+fn repaint_between(k: &mut Kept, top: f32, bottom: f32) {
+    const LINE: f32 = 40.0;
+    let (tile, cols) = (k.look.tile(), k.look.cols());
+    let (first, last) = (((top - LINE) / tile).floor().max(0.0) as usize, ((bottom + LINE) / tile).floor().max(0.0) as usize);
+    let tiles: Vec<usize> = (first * cols..(last + 1) * cols).filter(|&i| k.painted.get(i).copied().unwrap_or(false)).collect();
+    for i in tiles {
+        k.paint(i);
+    }
+}
+
+/// Repaints where the selection is (it's been cleared or replaced); everything painted if
+/// where it is isn't known.
+fn repaint_selection(k: &mut Kept) {
+    match k.sel {
+        Some((a, b)) => repaint_between(k, a.min(b), a.max(b)),
+        None => repaint(k),
     }
 }
 
@@ -953,6 +992,53 @@ mod tests {
         assert_eq!(copied.as_deref(), Some("alpha beta gamma"));
         t.pointer("t", 1.0, 10.0, Pointer::Click);
         assert!(t.kept["t"].doc.get_selected_text().is_none_or(|s| s.is_empty()), "a click clears it");
+    }
+
+    /// How many times a tile has been painted.
+    fn paints(tile: &Pixels) -> u64 {
+        let debug = format!("{tile:?}");
+        debug.rsplit("gen ").next().and_then(|n| n.trim_end_matches(')').parse().ok()).expect("Pixels' Debug shows its generation")
+    }
+
+    #[test]
+    fn selecting_repaints_only_where_it_changes() {
+        let (mut t, rx) = thread();
+        let para = "<p style='margin:0;font-size:20px;line-height:20px'>alpha beta gamma</p>";
+        t.show("t".into(), Arc::from(para.repeat(200)), LOOK);
+        let count = t.kept["t"].tiles.len();
+        assert!(count >= 6, "a long page: {count} tiles");
+        t.handle(Job::Paint { uid: "t".into(), tiles: (0..count).collect() });
+        let before: Vec<u64> = t.kept["t"].tiles.iter().map(paints).collect();
+        t.pointer("t", 1.0, 10.0, Pointer::SelectFrom);
+        for x in [100.0, 200.0, 399.0] {
+            t.pointer("t", x, 10.0, Pointer::SelectTo);
+        }
+        let after: Vec<u64> = t.kept["t"].tiles.iter().map(paints).collect();
+        assert!(after[0] > before[0], "the selected line is painted");
+        assert_eq!(after[count - 1], before[count - 1], "a tile far from the selection isn't");
+        t.handle(Job::Copy { uid: "t".into() });
+        let copied = rx.try_iter().find_map(|d| match d { Done::Copied(text) => Some(text), _ => None });
+        assert_eq!(copied.as_deref(), Some("alpha beta gamma"));
+        t.pointer("t", 1.0, 10.0, Pointer::Click);
+        let cleared: Vec<u64> = t.kept["t"].tiles.iter().map(paints).collect();
+        assert!(cleared[0] > after[0], "clearing paints the highlight away");
+        assert_eq!(cleared[count - 1], before[count - 1]);
+    }
+
+    #[test]
+    #[ignore = "timing, by hand"]
+    fn drag_timing() {
+        let (mut t, _rx) = thread();
+        let para = "<p style='margin:0;font-size:16px;line-height:20px'>alpha beta gamma delta epsilon zeta eta theta</p>";
+        t.show("t".into(), Arc::from(para.repeat(400)), LOOK);
+        let count = t.kept["t"].tiles.len();
+        t.handle(Job::Paint { uid: "t".into(), tiles: (0..count).collect() });
+        let start = std::time::Instant::now();
+        t.pointer("t", 1.0, 10.0, Pointer::SelectFrom);
+        for i in 0..200 {
+            t.pointer("t", 300.0, 10.0 + i as f32 * 2.0, Pointer::SelectTo);
+        }
+        eprintln!("{count} tiles: 200 drag moves in {:?}", start.elapsed());
     }
 
     #[test]
