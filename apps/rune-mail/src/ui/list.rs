@@ -14,7 +14,10 @@ pub fn view(s: &App, p: Palette) -> El {
         let note = if s.list_loading { "Loading…" } else { "No Messages" };
         return pane.center().child(text(note).font(BODY).color(p.secondary));
     }
-    let rows = col().key("rows").w_full().growth(GrowthSpec::default())
+    // The first row sits as far from the top as rows do from the side. The space is the list's,
+    // not the first row's: a row that became first (the one above archived) would otherwise
+    // grow by it at once, jumping every row below down before they slide up.
+    let rows = col().key("rows").w_full().pt(8.0).growth(GrowthSpec::default())
         .virtual_rows(
             s.messages.len(),
             40.0 + SMALL.line_px() * s.settings.preview_lines as f32,
@@ -124,8 +127,7 @@ fn message_row(s: &App, i: usize, p: Palette) -> El {
     }
     let divider = row().w_full().h(1.0).pl(30.0).pr(8.0)
         .child(el().grow(1.0).h(1.0).fill(if current || marked { Color::TRANSPARENT } else { p.separator }));
-    // The first row sits as far from the top as rows do from the side.
-    col().key(format!("msg-{}", m.uid)).w_full().px(8.0).pt(if i == 0 { 8.0 } else { 0.0 }).child(stack.child(card)).child(divider)
+    col().key(format!("msg-{}", m.uid)).w_full().px(8.0).child(stack.child(card)).child(divider)
 }
 
 /// The buttons a swipe uncovers: Flag, Archive and Delete on the right (swiping left), Read
