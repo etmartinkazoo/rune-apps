@@ -228,8 +228,9 @@ fn storage(s: &App, p: Palette) -> El {
                 })));
     }
     if !on {
-        return c.child(note("Off, mail is only on the server: each message downloads when you open it, and \
-            nothing is written here (actions made offline wait in memory until the network's back).", p));
+        return c.child(note("Off, each message downloads when you open it and nothing of it is kept. Only what \
+            the window opens on is: your mailboxes, contacts and the lists you last looked at, so it starts at once. \
+            Actions made offline wait in memory until the network's back.", p));
     }
     let budget = st.budget_bytes();
     let (meter, line) = match &s.storage_usage {

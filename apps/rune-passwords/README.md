@@ -38,6 +38,22 @@ scripts/install.sh passwords --dock   # and pin it in GNOME's dock
 
 Headless scenes for screenshots: `rune-passwords --scene demo|edit|new|security|deleted|swipe|confirm|settings|accounts|folders|signin|unlock --snap out.png`.
 
+## Browser extension
+
+`extension/` fills logins into Chromium from every account unlocked in the running app (the
+app keeps each account you unlock open until you lock). A login field gets a menu under it with
+the site's logins (a verification-code field, their codes), drawn in a frame the page can't
+read; the toolbar icon's badge counts the site's logins; its popup lists them, with the accounts
+to choose from at the top right, a click to fill, and **Code** to copy the verification code. `scripts/install.sh passwords` sets it all up, with nothing to do
+in the browser: it packs and signs the extension with a key made once for this computer
+(`~/.local/share/rune-passwords/extension.pem`), registers the native-messaging host it talks
+through (this binary, started by the browser) for that extension only, and, through sudo,
+installs the package as an external extension (`/usr/share/chromium/extensions/`) and the
+browser policy in `scripts/chromium-policy.json` (`/etc/chromium/policies/managed/rune.json`),
+which pins it. Restart Chromium to pick it up; bump `version` in `extension/manifest.json` for a
+change to reach an installed copy. The app answers it over a socket in `$XDG_RUNTIME_DIR` that
+only this user can open, only for the page's own site, and not at all while the vault is locked.
+
 ## Tests
 
 `cargo test` runs everything that needs no server. Against a throwaway Vaultwarden that allows

@@ -1,0 +1,100 @@
+:root {
+  color-scheme: light dark;
+  --text: #1d1d1f;
+  --secondary: #6e6e73;
+  --hover: rgba(0, 0, 0, 0.06);
+  --separator: rgba(0, 0, 0, 0.1);
+  --accent: #0a84ff;
+  --ground: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: #f5f5f7;
+    --secondary: #98989d;
+    --hover: rgba(255, 255, 255, 0.08);
+    --separator: rgba(255, 255, 255, 0.12);
+    --ground: #1e1e1e;
+  }
+}
+body {
+  margin: 0;
+  width: 300px;
+  font: 13px system-ui, sans-serif;
+  color: var(--text);
+  background: var(--ground);
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--separator);
+  font-weight: 600;
+}
+header img { width: 18px; height: 18px; }
+#site { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+main { padding: 4px; }
+.login {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.login:hover, .login:focus-visible { background: var(--hover); outline: none; }
+.who { flex: 1; min-width: 0; }
+.who div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user { color: var(--secondary); font-size: 12px; }
+.code {
+  border: 1px solid var(--separator);
+  background: none;
+  color: var(--accent);
+  border-radius: 5px;
+  padding: 3px 7px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.code:hover { background: var(--hover); }
+#note { margin: 0; padding: 14px 12px; color: var(--secondary); text-align: center; }
+header #site { flex: 1; min-width: 0; }
+.account {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--separator);
+  background: none;
+  color: var(--text);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.account::after { content: " ▾"; color: var(--secondary); }
+.account:hover { background: var(--hover); }
+.accounts {
+  position: absolute;
+  right: 8px;
+  top: 40px;
+  z-index: 1;
+  width: 240px;
+  padding: 4px;
+  border: 1px solid var(--separator);
+  border-radius: 8px;
+  background: var(--ground);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+.account-item { padding: 6px 8px; border-radius: 5px; cursor: pointer; }
+.account-item div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-item:hover { background: var(--hover); }
+.account-item.on { color: var(--accent); }
+.account-item.off { cursor: default; opacity: 0.55; }
+.account-item.off:hover { background: none; }
+
+/* The menu under a page's field (menu.html). */
+body.menu { width: auto; background: var(--ground); border: 1px solid var(--separator); border-radius: 10px; overflow: hidden; }
+body.menu main { padding: 4px; }

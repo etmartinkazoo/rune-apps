@@ -514,7 +514,7 @@ impl Thread {
             )));
         }
         let config = DocumentConfig {
-            viewport: Some(viewport(look.width as f32, 800.0, look)),
+            viewport: Some(viewport(look.width as f32, 800.0, look, 1.0)),
             base_url: Some(BASE_URL.into()),
             net_provider: Some(self.net.clone()),
             ua_stylesheets: sheets,
@@ -606,16 +606,18 @@ fn repaint(k: &mut Kept) {
     }
 }
 
-fn viewport(width: f32, height: f32, look: Look) -> Viewport {
+/// A viewport `width` by `height` CSS pixels, painted at `zoom` of the look's scale.
+fn viewport(width: f32, height: f32, look: Look, zoom: f32) -> Viewport {
     let scheme = if look.ink.is_some() { ColorScheme::Dark } else { ColorScheme::Light };
-    Viewport::new((width * look.scale).round() as u32, (height * look.scale).round().max(1.0) as u32, look.scale, scheme)
+    let scale = look.scale * zoom;
+    Viewport::new((width * scale).round() as u32, (height * scale).round().max(1.0) as u32, scale, scheme)
 }
 
 /// Lays the page out at its look's width; one wider than that (a fixed 600 px table in a
 /// narrower column) is laid out at its own width and shown shrunk to fit.
 fn lay_out(k: &mut Kept) {
     let column = k.look.width as f32;
-    k.doc.set_viewport(viewport(column, 800.0, k.look));
+    k.doc.set_viewport(viewport(column, 800.0, k.look, 1.0));
     k.doc.resolve(0.0);
     k.doc.handle_messages();
     k.doc.resolve(0.0);
@@ -624,16 +626,19 @@ fn lay_out(k: &mut Kept) {
     let mut width = column;
     if w > column + 1.0 {
         width = w;
-        k.doc.set_viewport(viewport(width, h, k.look));
+        k.doc.set_viewport(viewport(width, h, k.look, 1.0));
         k.doc.resolve(0.0);
         let root = k.doc.root_element();
         (w, h) = (root.scroll_width(), root.scroll_height());
     }
-    // The viewport as tall as the page, so its background and `vh` cover all of it.
-    k.doc.set_viewport(viewport(width, h.max(1.0), k.look));
+    k.zoom = column / width.max(w).max(1.0);
+    // The viewport as tall as the page, so its background and `vh` cover all of it; and at the
+    // scale it's painted at. Blitz shapes text at the viewport's scale, so a page shrunk to fit
+    // only when painted has its boxes and images shrunk but its text not: lines run off the
+    // edge and over the ones below.
+    k.doc.set_viewport(viewport(width, h.max(1.0), k.look, k.zoom));
     k.doc.resolve(0.0);
     h = k.doc.root_element().scroll_height();
-    k.zoom = column / width.max(w).max(1.0);
     k.size = (width, h.max(1.0));
 }
 
@@ -667,7 +672,7 @@ table[align=center i] { margin-left: auto; margin-right: auto; }
 td[valign=top i], th[valign=top i], tr[valign=top i] > td { vertical-align: top; }
 td[valign=middle i], th[valign=middle i], tr[valign=middle i] > td { vertical-align: middle; }
 td[valign=bottom i], th[valign=bottom i], tr[valign=bottom i] > td { vertical-align: bottom; }
-img { max-width: 100%; }
+img { max-width: 100% !important; }
 blockquote { margin: 0 0 0 4px; padding-left: 12px; border-left: 2px solid rgba(128, 128, 128, 0.45); }
 ";
 
@@ -962,6 +967,32 @@ mod tests {
     }
 
     #[test]
+    fn a_shrunk_message_shrinks_its_text_too() {
+        // Text is shaped at the viewport's scale: laid out at 1x and painted at half, a glyph
+        // came out twice the size of its box, over the lines around it.
+        let (mut t, _rx) = thread();
+        let html = r#"<body style="margin:0"><div style="width:800px"><p style="margin:0;font-size:40px;line-height:40px">&#9608;</p></div></body>"#;
+        t.show("z".into(), Arc::from(html), LOOK);
+        let k = t.kept.get_mut("z").unwrap();
+        assert!((k.zoom - 0.5).abs() < 0.02, "{}", k.zoom);
+        let (w, _, rgba) = k.render(0).unwrap();
+        let inked = |x, y| pixel(&rgba, w, x, y)[3] > 128;
+        assert!((k.height() - 20.0).abs() < 1.0, "{}", k.height());
+        assert!(inked(4, 10), "the block glyph, at half size");
+        assert!(!inked(30, 10), "and no bigger: 20 points wide, not 40");
+    }
+
+    #[test]
+    fn an_image_wider_than_the_column_fits_it() {
+        // Outlook writes each image's own width as its max-width, which would make the whole
+        // message shrink to fit a big screenshot.
+        let (mut t, _rx) = thread();
+        let html = r#"<body style="margin:0"><img src="https://img.example/s.png" width="1600" height="10" style="max-width:1901px;display:block"><p>text</p></body>"#;
+        t.show("i".into(), Arc::from(html), LOOK);
+        assert_eq!(t.kept["i"].zoom, 1.0);
+    }
+
+    #[test]
     fn font_and_sizes_read_as_css() {
         assert_eq!(font_size("+1"), Some("large"));
         assert_eq!(font_size("9"), Some("xxx-large"));
@@ -970,3 +1001,4 @@ mod tests {
         assert_eq!(data_url("data:text/plain,a%20b").as_deref(), Some(&b"a b"[..]));
     }
 }
+

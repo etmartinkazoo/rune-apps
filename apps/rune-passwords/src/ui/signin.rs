@@ -88,7 +88,7 @@ pub fn unlock(s: &App, p: Palette) -> El {
             .child(text("Other accounts").font(SMALL).color(p.secondary).w_full());
         for a in others {
             let id = a.id.clone();
-            c = c.child(super::sidebar::account_row(a, false, p).on_press(move |s: &mut App| s.switch_account(&id)));
+            c = c.child(super::sidebar::account_row(a, false, s.is_open(&a.id), p).on_press(move |s: &mut App| s.switch_account(&id)));
         }
     }
     centred(c, p)

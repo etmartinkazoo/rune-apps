@@ -93,9 +93,11 @@ fn card_of(s: &App, item: &Item, p: Palette) -> El {
         let code = t.code(now);
         let shown = if code.len() == 6 { format!("{} {}", &code[..3], &code[3..]) } else { code.clone() };
         let left = t.remaining(now);
+        // The countdown has a fixed width too, so the value doesn't shift each second.
         let value = row().gap(8.0).center_y()
             .child(text(shown).font(CODE).color(p.text))
-            .child(text(format!("{left}s")).font(SMALL).color(if left <= 5 { p.danger } else { p.secondary }));
+            .child(row().w(24.0).justify_end()
+                .child(text(format!("{left}s")).font(SMALL.features("'tnum' 1")).color(if left <= 5 { p.danger } else { p.secondary })));
         rows.push(field_row("Verification Code", value, Some(("code", code)), p));
     } else if !item.totp.is_empty() {
         rows.push(field_row("Verification Code", text("Can't read this setup key").font(SMALL).color(p.secondary), None, p));
@@ -163,8 +165,13 @@ fn field_row_with(label: &str, value: El, after: Option<El>, copy: Option<(&str,
                     s.copy_tip = None;
                 }
             })
-            .on_drawn_layout(move |s: &mut App, r| {
+            // Where the value is, for placing "Click to copy": only worth a view run when the tip
+            // shows over this one (a value moving otherwise would re-run the whole view).
+            .on_drawn_layout_tx(move |s: &mut App, r, tx: &mut Tx| {
                 s.field_rects.insert(rect.clone(), r);
+                if !s.copy_tip.as_ref().is_some_and(|t| t.key == rect) {
+                    tx.live_only();
+                }
             })
             .on_press_tx(move |s: &mut App, tx: &mut Tx| s.copy(&what, v.clone(), tx));
     }

@@ -105,7 +105,8 @@ pub fn segmented<T: Copy + PartialEq + 'static>(key: &str, options: &[(&str, T)]
 }
 
 /// Keys that aren't a focused field's: ↑ and ↓ through the list, ⌘N a new password, ⌘F to
-/// search, ⌘E to edit, ⌘L to lock, Escape out of editing, Delete (or ⌘⌫) to delete.
+/// search, ⌘E to edit, ⌘L to lock, ⌘U / ⌘P / ⌘T to copy the selected item's user name, password
+/// or verification code, Escape out of editing, Delete (or ⌘⌫) to delete.
 pub fn on_key(s: &mut App, e: &KeyEvent, tx: &mut Tx) -> bool {
     if s.phase != Phase::Ready {
         return false;
@@ -124,6 +125,9 @@ pub fn on_key(s: &mut App, e: &KeyEvent, tx: &mut Tx) -> bool {
         _ if e.is_command('e') && s.draft.is_none() => s.edit(),
         _ if e.is_command('s') && s.draft.is_some() => s.save(tx),
         _ if e.is_command('r') => s.sync(),
+        _ if e.is_command('u') && s.draft.is_none() => s.copy_selected_user(tx),
+        _ if e.is_command('p') && s.draft.is_none() => s.copy_selected_password(tx),
+        _ if e.is_command('t') && s.draft.is_none() => s.copy_selected_code(tx),
         Key::Delete if s.draft.is_none() => s.ask_delete_selected(),
         Key::Backspace if e.mods.cmd && s.draft.is_none() => s.ask_delete_selected(),
         Key::Up if s.draft.is_none() => s.step(-1),

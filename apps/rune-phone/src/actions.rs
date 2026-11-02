@@ -356,7 +356,11 @@ impl App {
             self.focus = Focus::List;
         }
         self.say(format!("Deleted {}", c.what), tx);
-        self.send_cmd(Cmd::Delete(c.ids));
+        // A sent text the phone hasn't listed yet is only here.
+        let ids: Vec<String> = c.ids.into_iter().filter(|id| !id.starts_with(crate::app::LOCAL)).collect();
+        if !ids.is_empty() {
+            self.send_cmd(Cmd::Delete(ids));
+        }
     }
 
     // Swiping

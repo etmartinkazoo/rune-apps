@@ -1,15 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <!-- Rune's light app icon: a plain tile and one line glyph (Lucide, ISC) in the app's colour. -->
+  <!-- Light-background companion: the same coloured tile with a slightly darker silver frame. -->
   <defs>
-    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="1" stop-color="#f2f2f7"/>
+    <clipPath id="screen"><rect x="54" y="54" width="404" height="404" rx="28"/></clipPath>
+    <linearGradient id="frame" x2="0" y2="1">
+      <stop stop-color="#d6dae3"/><stop offset="1" stop-color="#b7becb"/>
     </linearGradient>
   </defs>
-  <rect x="32" y="32" width="448" height="448" rx="104" fill="url(#tile)"/>
-  <rect x="33.5" y="33.5" width="445" height="445" rx="102.5" fill="none" stroke="#000000" stroke-opacity="0.10" stroke-width="3"/>
-  <g transform="translate(136 136) scale(10)" color="#e0a800" fill="none" stroke="currentColor"
-     stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/>
+  <rect x="32" y="40" width="448" height="448" rx="50" fill="#172033" opacity=".18"/>
+  <rect x="32" y="32" width="448" height="448" rx="50" fill="url(#frame)"/>
+  <g clip-path="url(#screen)">
+    <path fill="#d5af59" d="M54 54h404v404H54z"/>
+    <path fill="#bd9648" d="M54 54h404v132C362 76 248 54 54 54Z"/>
+    <path fill="#aa8542" opacity=".30" d="M112 93h83l353 353v102H376L95 267Z"/>
+    <path fill="#e2c782" d="M54 336c154-32 246 26 340 122H54Z"/>
+    <!-- Visible glyph bounds share a 96-unit inset and a 176-unit longest side. -->
+    <g transform="translate(-9.6 8) scale(.733333)">
+      <path fill="#f5f2e9" d="M168 120h112l64 64v152a24 24 0 0 1-24 24H168a24 24 0 0 1-24-24V144a24 24 0 0 1 24-24Z"/>
+      <path fill="#dfd5b8" d="M280 120v44a20 20 0 0 0 20 20h44Z"/>
+      <path d="M188 216h112m-112 48h112m-112 48h76" fill="none" stroke="#bd9c55" stroke-width="16" stroke-linecap="round"/>
+    </g>
   </g>
 </svg>

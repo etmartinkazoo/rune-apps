@@ -1,0 +1,57 @@
+{
+  "RestoreOnStartup": 4,
+  "RestoreOnStartupURLs": [
+    "about:blank"
+  ],
+  "HomepageLocation": "about:blank",
+  "HomepageIsNewTabPage": false,
+  "NewTabPageLocation": "about:blank",
+  "PasswordManagerEnabled": false,
+  "PasswordLeakDetectionEnabled": false,
+  "AutofillAddressEnabled": false,
+  "AutofillCreditCardEnabled": false,
+  "PaymentMethodQueryEnabled": false,
+  "ImportSavedPasswords": false,
+  "ImportAutofillFormData": false,
+  "GenAiDefaultSettings": 2,
+  "AIModeSettings": 1,
+  "GeminiSettings": 1,
+  "GenAILocalFoundationalModelSettings": 1,
+  "HelpMeWriteSettings": 2,
+  "HistorySearchSettings": 2,
+  "TabOrganizerSettings": 2,
+  "TabCompareSettings": 2,
+  "CreateThemesSettings": 2,
+  "DevToolsGenAiSettings": 2,
+  "AutofillPredictionSettings": 2,
+  "LensOverlaySettings": 1,
+  "LensRegionSearchEnabled": false,
+  "GoogleSearchSidePanelEnabled": false,
+  "SideSearchEnabled": false,
+  "ShoppingListEnabled": false,
+  "PromotionsEnabled": false,
+  "MediaRecommendationsEnabled": false,
+  "NTPCardsVisible": false,
+  "FeedbackSurveysEnabled": false,
+  "UserFeedbackAllowed": false,
+  "MetricsReportingEnabled": false,
+  "UrlKeyedAnonymizedDataCollectionEnabled": false,
+  "SpellCheckServiceEnabled": false,
+  "AlternateErrorPagesEnabled": false,
+  "BackgroundModeEnabled": false,
+  "DefaultBrowserSettingEnabled": false,
+  "PrivacySandboxPromptEnabled": false,
+  "PrivacySandboxAdTopicsEnabled": false,
+  "PrivacySandboxSiteEnabledAdsEnabled": false,
+  "PrivacySandboxAdMeasurementEnabled": false,
+  "ExtensionSettings": {
+    "ddkjiahejlhfcafbddmgiahcphecmpfh": {
+      "installation_mode": "force_installed",
+      "update_url": "https://clients2.google.com/service/update2/crx",
+      "toolbar_pin": "force_pinned"
+    },
+    "gphhapmejobijbbhgpjhcjognlahblep": {
+      "installation_mode": "blocked"
+    }
+  }
+}

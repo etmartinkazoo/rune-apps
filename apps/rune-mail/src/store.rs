@@ -1,6 +1,12 @@
-//! Mail kept on this computer: an encrypted SQLite database (SQLCipher), off unless Settings
-//! turn it on. On, it keeps each account's mailboxes and contacts, the lists of the mailboxes
-//! you've opened, message bodies (the original HTML, compressed, parsed again when opened),
+//! Mail kept on this computer: an encrypted SQLite database (SQLCipher), in two parts.
+//!
+//! The launch cache is always kept, so the window opens at once on what it last showed: each
+//! account's mailboxes, contacts and today's events, the lists of the mailboxes you've opened
+//! (their messages' summaries), and the last view. With Storage off, nothing else is kept, and
+//! summaries no list shows any more go at each launch.
+//!
+//! Offline mail is off unless Settings turn it on ([`Store::is_enabled`]). On, it also keeps
+//! message bodies (the original HTML, compressed, parsed again when opened),
 //! attachment files, remote images you chose to load (if that's on), a full-text index over
 //! all of it, and actions waiting for the network. The prefetcher (`prefetch.rs`) fills it
 //! with the newest mail; `prune` keeps it inside the budget, dropping the oldest first while
@@ -276,6 +282,8 @@ impl Store {
         Store::open_at(&path, &key(path.exists())?)
     }
 
+    /// Offline mail is on (bodies, files, images, search, the outbox). The launch cache doesn't
+    /// depend on it.
     pub fn is_enabled(&self) -> bool {
         self.enabled.load(Ordering::SeqCst)
     }
@@ -322,6 +330,47 @@ impl Store {
         f(&db).ok()
     }
 
+    /// The launch cache's reads and writes: whether or not offline mail is on.
+    fn cache_read<T>(&self, f: impl FnOnce(&Connection) -> rusqlite::Result<T>) -> Option<T> {
+        let Some(reader) = &self.reader else { return self.cache_with(f) };
+        f(&reader.lock().unwrap_or_else(|e| e.into_inner())).ok()
+    }
+
+    fn cache_with<T>(&self, f: impl FnOnce(&Connection) -> rusqlite::Result<T>) -> Option<T> {
+        f(&self.lock()).ok()
+    }
+
+    /// Turning offline mail off: drops bodies, attachments, images and the search index, and
+    /// the summaries no kept list shows, keeping the launch cache. Hands back the actions that
+    /// were waiting for the network, as [`Store::clear`] does.
+    pub fn clear_offline(&self) -> Vec<(String, String)> {
+        let db = self.lock();
+        let queued = db
+            .prepare("SELECT account, json FROM outbox ORDER BY seq")
+            .and_then(|mut q| q.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?.collect())
+            .unwrap_or_default();
+        let _ = (|| -> rusqlite::Result<()> {
+            let tx = db.unchecked_transaction()?;
+            tx.execute_batch("DELETE FROM body; DELETE FROM file; DELETE FROM image; DELETE FROM outbox;")?;
+            let shown = Store::shown(&tx)?;
+            let mut q = tx.prepare("SELECT uid FROM message")?;
+            let all: Vec<String> = q.query_map([], |r| r.get(0))?.filter_map(Result::ok).collect();
+            drop(q);
+            for uid in all.iter().filter(|u| !shown.contains(*u)) {
+                tx.execute("DELETE FROM message WHERE uid = ?1", [uid])?;
+                if let Some(row) = search_row(&tx, uid)? {
+                    tx.execute("DELETE FROM search WHERE rowid = ?1", [row])?;
+                    tx.execute("DELETE FROM search_row WHERE uid = ?1", [uid])?;
+                }
+            }
+            // The words of the bodies just dropped leave the index too.
+            tx.execute("UPDATE search SET body = '' WHERE body <> ''", [])?;
+            tx.commit()
+        })();
+        let _ = db.execute_batch("PRAGMA incremental_vacuum;");
+        queued
+    }
+
     fn with<T>(&self, f: impl FnOnce(&Connection) -> rusqlite::Result<T>) -> Option<T> {
         if !self.is_enabled() {
             return None;
@@ -337,11 +386,11 @@ impl Store {
     // Small values: the last view, sync states.
 
     pub fn get(&self, key: &str) -> Option<String> {
-        self.read(|db| db.query_row("SELECT value FROM kv WHERE key = ?1", [key], |r| r.get(0)).optional()).flatten()
+        self.cache_read(|db| db.query_row("SELECT value FROM kv WHERE key = ?1", [key], |r| r.get(0)).optional()).flatten()
     }
 
     pub fn set(&self, key: &str, value: &str) {
-        self.with(|db| db.execute("INSERT OR REPLACE INTO kv (key, value) VALUES (?1, ?2)", [key, value]));
+        self.cache_with(|db| db.execute("INSERT OR REPLACE INTO kv (key, value) VALUES (?1, ?2)", [key, value]));
     }
 
     /// An account's events for `day` (YYYY-MM-DD), so the sidebar shows them before it connects.
@@ -360,7 +409,7 @@ impl Store {
     // Mailboxes and contacts: replaced whole, per account.
 
     pub fn save_mailboxes(&self, account: &str, list: &[Mailbox]) {
-        self.with(|db| {
+        self.cache_with(|db| {
             let tx = db.unchecked_transaction()?;
             tx.execute("DELETE FROM mailbox WHERE account = ?1", [account])?;
             for m in list {
@@ -375,7 +424,7 @@ impl Store {
     }
 
     pub fn save_contacts(&self, account: &str, list: &[Contact]) {
-        self.with(|db| {
+        self.cache_with(|db| {
             let tx = db.unchecked_transaction()?;
             tx.execute("DELETE FROM contact WHERE account = ?1", [account])?;
             for c in list {
@@ -390,7 +439,7 @@ impl Store {
     }
 
     fn rows<T: serde::de::DeserializeOwned>(&self, sql: &str, arg: &str) -> Vec<T> {
-        self.read(|db| {
+        self.cache_read(|db| {
             let mut q = db.prepare(sql)?;
             let it = q.query_map([arg], |r| r.get::<_, String>(0))?;
             Ok(it.filter_map(|s| s.ok().and_then(|s| parse(&s))).collect())
@@ -417,13 +466,20 @@ impl Store {
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![m.uid, m.account, m.id, m.thread_key, m.received_at, json(&m.mailbox_ids), new],
         )?;
-        // One index entry per message; the body column fills in once the body is kept.
+        if same_words && search_row(tx, &m.uid)?.is_some() {
+            return Ok(());
+        }
+        Store::index(tx, m)
+    }
+
+    /// A message's entry in the search index, made or brought up to date. The body column
+    /// fills in once the body is kept.
+    fn index(tx: &rusqlite::Transaction, m: &Summary) -> rusqlite::Result<()> {
         let names = |list: &[crate::jmap::Addr]| {
             list.iter().map(|a| format!("{} {}", a.name.as_deref().unwrap_or(""), a.email)).collect::<Vec<_>>().join(" ")
         };
         let (from, to) = (names(&m.from), names(&m.to));
         match search_row(tx, &m.uid)? {
-            Some(_) if same_words => {}
             Some(row) => {
                 tx.execute(
                     "UPDATE search SET sender = ?2, recipients = ?3, subject = ?4, preview = ?5 WHERE rowid = ?1",
@@ -443,7 +499,7 @@ impl Store {
 
     /// Keeps messages seen in a mailbox (the prefetcher's lists), outside any view's list.
     pub fn put_messages(&self, list: &[Summary]) {
-        self.with(|db| {
+        self.cache_with(|db| {
             let tx = db.unchecked_transaction()?;
             for m in list {
                 Store::put_message(&tx, m)?;
@@ -454,7 +510,7 @@ impl Store {
 
     /// Keeps a view's rows and conversations as they came from the server.
     pub fn save_listing(&self, view: &View, threads_on: bool, rows: &[Summary], threads: &Threads) {
-        self.with(|db| {
+        self.cache_with(|db| {
             let tx = db.unchecked_transaction()?;
             for m in rows.iter().chain(threads.values().flatten()) {
                 Store::put_message(&tx, m)?;
@@ -480,7 +536,7 @@ impl Store {
 
     /// A view's rows and conversations as last seen, if it's been opened before.
     pub fn listing(&self, view: &View, threads_on: bool) -> Option<(Vec<Summary>, Threads)> {
-        self.read(|db| {
+        self.cache_read(|db| {
             let (rows, keys): (String, String) = db.query_row(
                 "SELECT rows, keys FROM listing WHERE view = ?1 AND threads = ?2",
                 params![view_key(view), threads_on],
@@ -1038,13 +1094,33 @@ mod tests {
     }
 
     #[test]
+    fn off_keeps_the_launch_cache_and_drops_offline_mail() {
+        let s = store();
+        let view = View::Mailbox { account: "a@x.com".into(), id: "in".into() };
+        let (shown, gone) = (msg("1", "s", "in"), msg("2", "s", "in"));
+        s.put_messages(std::slice::from_ref(&gone));
+        s.save_listing(&view, false, std::slice::from_ref(&shown), &Threads::default());
+        s.save_body(&shown.uid, &body("text", None), true);
+        s.queue("a@x.com", r#"{"op":1}"#);
+        s.set_enabled(false);
+        let queued = s.clear_offline();
+        assert_eq!(queued.len(), 1, "waiting actions handed back");
+        let (rows, _) = s.listing(&view, false).expect("the list last seen stays");
+        assert_eq!(rows.iter().map(|m| m.uid.as_str()).collect::<Vec<_>>(), [shown.uid.as_str()]);
+        s.set_enabled(true);
+        assert!(!s.has_body(&shown.uid), "bodies go");
+        assert!(s.search("s", &[], 10).iter().all(|m| m.uid != gone.uid), "a summary no list shows goes");
+        assert!(s.queued().is_empty());
+    }
+
+    #[test]
     fn clearing_hands_back_waiting_actions_and_off_means_off() {
         let s = store();
         s.set("hello", "world");
         s.queue("a@x.com", r#"{"op":1}"#);
         s.set_enabled(false);
-        assert_eq!(s.get("hello"), None, "off: nothing reads");
-        assert!(!s.queue("a@x.com", "{}"), "off: nothing writes");
+        assert_eq!(s.get("hello").as_deref(), Some("world"), "off: the launch cache still reads");
+        assert!(!s.queue("a@x.com", "{}"), "off: offline mail writes nothing");
         assert_eq!(s.clear(), [("a@x.com".to_owned(), r#"{"op":1}"#.to_owned())]);
         s.set_enabled(true);
         assert_eq!(s.get("hello"), None);
@@ -1070,3 +1146,4 @@ mod tests {
         assert!(s.queued().is_empty());
     }
 }
+

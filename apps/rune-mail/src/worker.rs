@@ -67,7 +67,8 @@ pub enum Cmd {
     Keep(Vec<Summary>),
     /// Keeps a small value in the store (the last view), off the UI thread.
     Remember { key: String, value: String },
-    /// Empties the store (the UI has already turned it off), then turns it `on` again or not.
+    /// Empties the store (the UI has already turned it off), then turns it `on` again or not:
+    /// with `on` false, only offline mail goes and the launch cache stays.
     /// Actions it held for the network move to memory, or back in.
     ClearStore { on: bool },
     /// Opens attachment `file` of a message with the system's app, or writes it to `save`.
@@ -929,7 +930,8 @@ impl Worker {
                 Cmd::ClearStore { on } => {
                     if let Some(store) = self.store.clone() {
                         store.set_enabled(false);
-                        let queued = store.clear();
+                        // Off, only offline mail goes: the launch cache stays.
+                        let queued = if on { store.clear() } else { store.clear_offline() };
                         store.set_enabled(on);
                         for (account, op) in queued {
                             if let Ok(op) = serde_json::from_str::<Op>(&op) {

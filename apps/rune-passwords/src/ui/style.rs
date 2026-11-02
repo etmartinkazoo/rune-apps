@@ -97,7 +97,8 @@ pub const COUNT: TextStyle = TextStyle::new(15.0, 600.0);
 pub const TINY: TextStyle = TextStyle::new(10.5, 500.0);
 pub const NAME: TextStyle = TextStyle::new(19.0, 700.0);
 pub const BIG: TextStyle = TextStyle::new(22.0, 700.0);
-pub const CODE: TextStyle = TextStyle::new(17.0, 600.0);
+/// Tabular digits: a code keeps its width as it changes, so nothing beside it moves.
+pub const CODE: TextStyle = TextStyle::new(17.0, 600.0).features("'tnum' 1");
 pub const MONO: TextStyle = TextStyle::new(13.0, 400.0);
 
 /// A Lucide icon (ISC licence): elements in a 24-point box, stroked in the element's colour.

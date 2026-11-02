@@ -184,8 +184,20 @@ pub struct App {
     /// Where the copyable values are drawn, by field, for placing `copy_tip`.
     pub field_rects: HashMap<String, [f32; 4]>,
     wake: Option<Waker>,
-    cmds: Option<Sender<Cmd>>,
-    events: Option<Receiver<Event>>,
+    /// The browser extension's requests (see `bridge.rs`).
+    bridge: Option<Receiver<crate::bridge::Request>>,
+    /// A vault thread per account, by account id ("" for one signing in to a new account).
+    sessions: HashMap<String, Session>,
+    /// The session the window shows: `account_id`'s, or "" while adding an account.
+    session: String,
+}
+
+/// One account's vault thread, and its vault while it's open but not the one shown (switching
+/// away keeps it open, so the browser extension and switching back don't ask again).
+struct Session {
+    cmds: Sender<Cmd>,
+    events: Receiver<Event>,
+    parked: Option<Vault>,
 }
 
 pub fn init() -> App {
@@ -228,8 +240,9 @@ pub fn init() -> App {
         copy_tip: None,
         field_rects: HashMap::new(),
         wake: None,
-        cmds: None,
-        events: None,
+        bridge: None,
+        sessions: HashMap::new(),
+        session: String::new(),
     };
     match s.phase {
         Phase::SignIn => s.forms.server.focused = true,
@@ -240,9 +253,11 @@ pub fn init() -> App {
 
 pub fn setup(s: &mut App, wake: Waker) {
     s.wake = Some(wake.clone());
-    let (cmds, events) = crate::worker::spawn(wake);
-    s.cmds = Some(cmds);
-    s.events = Some(events);
+    s.bridge = crate::bridge::listen(wake.clone());
+    let active = crate::account::active();
+    s.session = active.as_ref().map(|a| a.id.clone()).unwrap_or_default();
+    let (cmds, events) = crate::worker::spawn(wake, active);
+    s.sessions.insert(s.session.clone(), Session { cmds, events, parked: None });
     // A demo scene may have opened its vault already.
     if let Some(v) = s.vault.take() {
         s.want_icons(&v);
@@ -253,19 +268,30 @@ pub fn setup(s: &mut App, wake: Waker) {
 pub fn poll(s: &mut App, clock: f64, tx: &mut Tx) -> bool {
     s.clock = clock;
     let mut changed = false;
-    let events: Vec<Event> = s.events.as_ref().map(|e| e.try_iter().collect()).unwrap_or_default();
-    for e in events {
-        s.apply(e, tx);
-        changed = true;
+    let events: Vec<(String, Event)> =
+        s.sessions.iter().flat_map(|(id, w)| w.events.try_iter().map(move |e| (id.clone(), e))).collect();
+    for (id, e) in events {
+        if id == s.session {
+            s.apply(e, tx);
+            changed = true;
+        } else {
+            s.apply_parked(&id, e);
+        }
     }
     changed |= s.icons.poll();
+    // The browser's requests: answered from the open vault, and with nothing while it's locked.
+    if let Some(b) = &s.bridge {
+        for r in b.try_iter() {
+            let _ = r.reply.send(crate::bridge::answer(&s.accounts, &s.open_vaults(), &r.query));
+        }
+    }
     changed |= s.settle_quiet_swipe(tx);
     if s.status.as_ref().is_some_and(|(_, until)| clock >= *until) {
         s.status = None;
         changed = true;
     }
-    // Locks once nothing has been typed or clicked for the set time.
-    if s.phase == Phase::Ready && s.settings.lock_minutes > 0 {
+    // Locks once nothing has been typed or clicked for the set time: every open account.
+    if (s.phase == Phase::Ready || s.any_parked()) && s.settings.lock_minutes > 0 {
         let idle = Duration::from_secs(u64::from(s.settings.lock_minutes) * 60);
         match rune::last_input() {
             Some(at) if at.elapsed() >= idle => {
@@ -277,21 +303,82 @@ pub fn poll(s: &mut App, clock: f64, tx: &mut Tx) -> bool {
     }
     // A verification code on screen counts down: redrawn once a second, not on every frame
     // (poll runs each frame, and true rebuilds the whole view).
-    if s.phase == Phase::Ready && s.selected_item().is_some_and(|i| !i.totp.is_empty()) {
+    // Only while a code shows: not editing, and not a setup key that doesn't read.
+    if s.phase == Phase::Ready && s.draft.is_none() && s.selected_item().is_some_and(|i| crate::totp::Totp::parse(&i.totp).is_some()) {
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
         if now.as_secs() != s.code_second {
             s.code_second = now.as_secs();
             changed = true;
         }
-        tx.wake_after(Duration::from_secs(1) - Duration::from_nanos(u64::from(now.subsec_nanos())));
+        // Just past the next second, so the wake never lands a hair before it and asks again.
+        tx.wake_after(Duration::from_millis(1005) - Duration::from_nanos(u64::from(now.subsec_nanos())));
     }
     changed
 }
 
 impl App {
     fn send(&self, cmd: Cmd) {
-        if let Some(c) = &self.cmds {
-            let _ = c.send(cmd);
+        if let Some(w) = self.sessions.get(&self.session) {
+            let _ = w.cmds.send(cmd);
+        }
+    }
+
+    /// The session for kept account `id`, started if it isn't.
+    fn ensure_session(&mut self, id: &str) {
+        if self.sessions.contains_key(id) {
+            return;
+        }
+        let Some(wake) = self.wake.clone() else { return };
+        let (cmds, events) = crate::worker::spawn(wake, crate::account::load(id));
+        self.sessions.insert(id.to_owned(), Session { cmds, events, parked: None });
+    }
+
+    /// An open account not on screen: its syncs keep its vault current; locking closes it.
+    fn apply_parked(&mut self, id: &str, e: Event) {
+        let Some(w) = self.sessions.get_mut(id) else { return };
+        match e {
+            Event::Vault(v) if w.parked.is_some() => w.parked = Some(*v),
+            Event::Locked => w.parked = None,
+            _ => {}
+        }
+    }
+
+    fn any_parked(&self) -> bool {
+        self.sessions.values().any(|w| w.parked.is_some())
+    }
+
+    /// Account `id` is open (shown or not).
+    pub fn is_open(&self, id: &str) -> bool {
+        if self.account_id.as_deref() == Some(id) && self.phase == Phase::Ready && !self.adding {
+            return self.vault.is_some();
+        }
+        self.sessions.get(id).is_some_and(|w| w.parked.is_some())
+    }
+
+    /// Every open vault with its account, for the browser extension.
+    pub fn open_vaults(&self) -> Vec<(&AccountEntry, &Vault)> {
+        self.accounts
+            .iter()
+            .filter_map(|a| {
+                let shown = (self.account_id.as_deref() == Some(a.id.as_str()) && self.phase == Phase::Ready && !self.adding)
+                    .then_some(self.vault.as_ref())
+                    .flatten();
+                shown.or_else(|| self.sessions.get(&a.id).and_then(|w| w.parked.as_ref())).map(|v| (a, v))
+            })
+            .collect()
+    }
+
+    /// Takes the vault on screen out of view, keeping it open in its session.
+    fn park(&mut self) {
+        if self.phase == Phase::Ready
+            && let Some(v) = self.vault.take()
+            && let Some(w) = self.sessions.get_mut(&self.session)
+        {
+            w.parked = Some(v);
+        }
+        if self.session.is_empty() {
+            // A sign-in to a new account abandoned.
+            self.sessions.remove("");
         }
     }
 
@@ -335,17 +422,29 @@ impl App {
             }
             Event::Locked => {}
             Event::SignedOut => {
+                let gone = std::mem::take(&mut self.session);
+                self.sessions.remove(&gone);
                 self.refresh_accounts();
                 self.adding = false;
-                self.phase = Phase::SignIn;
-                self.forms.password = TextEdit::new("").secure();
-                self.forms.server.focused = true;
-                // The next account may be on another server.
-                self.icons = crate::icons::Icons::default();
-            }
-            Event::Switched(id) => {
-                self.refresh_accounts();
-                self.locked_on(&id);
+                // On to another kept account (open if it is), else signing in afresh.
+                match self.accounts.first().map(|a| a.id.clone()) {
+                    Some(next) => {
+                        self.account_id = None;
+                        self.switch_account(&next);
+                    }
+                    None => {
+                        if let Some(wake) = self.wake.clone() {
+                            let (cmds, events) = crate::worker::spawn(wake, None);
+                            self.sessions.insert(String::new(), Session { cmds, events, parked: None });
+                        }
+                        self.phase = Phase::SignIn;
+                        self.busy = false;
+                        self.forms.password = TextEdit::new("").secure();
+                        self.forms.server.focused = true;
+                        // The next account may be on another server.
+                        self.icons = crate::icons::Icons::default();
+                    }
+                }
             }
         }
     }
@@ -358,6 +457,14 @@ impl App {
             self.phase = Phase::Ready;
             self.adding = false;
             self.refresh_accounts();
+            // A new account's session goes under its id once signed in.
+            if self.session.is_empty()
+                && let Some(id) = self.account_id.clone()
+                && let Some(w) = self.sessions.remove("")
+            {
+                self.sessions.insert(id.clone(), w);
+                self.session = id;
+            }
             self.forms.password = TextEdit::new("").secure();
             self.forms.unlock = TextEdit::new("").secure();
             self.forms.needs_code = None;
@@ -412,8 +519,14 @@ impl App {
         self.forms.unlock = TextEdit::new("").secure();
     }
 
-    /// Closes the vault: the decrypted items go from here, and the keys from the vault thread.
+    /// Closes every open vault: the decrypted items go from here, and the keys from the vault
+    /// threads.
     pub fn lock(&mut self) {
+        for w in self.sessions.values_mut() {
+            if w.parked.take().is_some() {
+                let _ = w.cmds.send(Cmd::Lock);
+            }
+        }
         if self.phase != Phase::Ready {
             return;
         }
@@ -438,10 +551,13 @@ impl App {
         self.offline = false;
     }
 
+    /// Signs the account on screen out; other open accounts stay open.
     pub fn sign_out(&mut self) {
-        self.lock();
         self.accounts_open = false;
         self.send(Cmd::SignOut);
+        self.forget_vault();
+        self.phase = Phase::Unlock;
+        self.busy = true;
     }
 
     // Accounts
@@ -474,14 +590,22 @@ impl App {
         self.icons = crate::icons::Icons::default();
     }
 
-    /// Locks, and moves to kept account `id`, whose master password then opens it.
+    /// Moves to kept account `id`: straight in if it's open, else to its unlock screen. The
+    /// account left stays open, if it was.
     pub fn switch_account(&mut self, id: &str) {
         self.accounts_open = false;
-        if self.busy || (self.account_id.as_deref() == Some(id) && !self.adding) || !self.accounts.iter().any(|a| a.id == id) {
+        if (self.busy && !self.session.is_empty()) || (self.account_id.as_deref() == Some(id) && !self.adding) || !self.accounts.iter().any(|a| a.id == id) {
             return;
         }
-        self.send(Cmd::Switch(id.to_owned()));
+        self.park();
+        let _ = crate::account::set_active(id);
+        self.ensure_session(id);
+        self.session = id.to_owned();
+        let parked = self.sessions.get_mut(id).and_then(|w| w.parked.take());
         self.locked_on(id);
+        if let Some(v) = parked {
+            self.open(v);
+        }
     }
 
     /// Locks, and signs in to another account; the one in use stays kept.
@@ -490,8 +614,13 @@ impl App {
         if self.busy {
             return;
         }
-        self.send(Cmd::AddAccount);
         let server = self.current_account().map(|a| a.server.clone()).unwrap_or_default();
+        self.park();
+        if let Some(wake) = self.wake.clone() {
+            let (cmds, events) = crate::worker::spawn(wake, None);
+            self.sessions.insert(String::new(), Session { cmds, events, parked: None });
+        }
+        self.session = String::new();
         self.forget_vault();
         self.adding = true;
         self.error = None;
@@ -563,8 +692,11 @@ impl App {
     }
 
     pub fn selected_item(&self) -> Option<&Item> {
-        let id = self.selected.as_ref()?;
-        self.vault.as_ref()?.items.iter().find(|i| &i.id == id)
+        self.item(self.selected.as_ref()?)
+    }
+
+    pub fn item(&self, id: &str) -> Option<&Item> {
+        self.vault.as_ref()?.items.iter().find(|i| i.id == id)
     }
 
     pub fn choose(&mut self, c: Category) {
@@ -612,6 +744,27 @@ impl App {
         }
         tx.copy(value);
         self.say(format!("Copied {what}"), tx);
+    }
+
+    /// The selected item's user name, from the keyboard.
+    pub fn copy_selected_user(&mut self, tx: &mut Tx) {
+        if let Some(v) = self.selected_item().map(|i| i.username.clone()) {
+            self.copy("user name", v, tx);
+        }
+    }
+
+    /// The selected item's password, from the keyboard.
+    pub fn copy_selected_password(&mut self, tx: &mut Tx) {
+        if let Some(v) = self.selected_item().map(|i| i.password.clone()) {
+            self.copy("password", v, tx);
+        }
+    }
+
+    /// The selected item's verification code as it stands now, from the keyboard.
+    pub fn copy_selected_code(&mut self, tx: &mut Tx) {
+        let Some(t) = self.selected_item().and_then(|i| crate::totp::Totp::parse(&i.totp)) else { return };
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        self.copy("code", t.code(now), tx);
     }
 
     // Editing

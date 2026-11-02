@@ -89,12 +89,14 @@ pub fn avatar(email: &str, size: f32) -> El {
 }
 
 /// A kept account as a row: its letter, address and server.
-pub fn account_row(a: &AccountEntry, current: bool, p: Palette) -> El {
+/// `open`: the account's vault is open (shown or not), so choosing it asks for nothing.
+pub fn account_row(a: &AccountEntry, current: bool, open: bool, p: Palette) -> El {
+    let sub = if open && !current { format!("{} · Unlocked", a.host) } else { a.host.clone() };
     row().key(format!("account-{}", a.id)).w_full().h(40.0).px(8.0).gap(8.0).center_y().radius(6.0).hover(p.hover)
         .child(avatar(&a.email, 24.0))
         .child(col().grow(1.0).min_w(0.0)
             .child(text(a.email.clone()).font(BODY).color(p.text).truncate())
-            .child(text(a.host.clone()).font(SMALL).color(p.secondary).truncate()))
+            .child(text(sub).font(SMALL).color(p.secondary).truncate()))
         .child(el().size(16.0, 16.0).center().child(icon(&style::CHECK, 14.0).color(p.accent).opacity(if current { 1.0 } else { 0.0 })))
 }
 
@@ -107,7 +109,7 @@ pub fn account_menu(s: &App, p: Palette) -> El {
     for a in &s.accounts {
         let id = a.id.clone();
         let current = s.account_id.as_deref() == Some(a.id.as_str());
-        menu = menu.child(account_row(a, current, p).role("menuitem").on_press(move |s: &mut App| s.switch_account(&id)));
+        menu = menu.child(account_row(a, current, s.is_open(&a.id), p).role("menuitem").on_press(move |s: &mut App| s.switch_account(&id)));
     }
     menu.child(el().w_full().h(1.0).fill(p.separator).mx(4.0).my(2.0))
         .child(row().key("add-account").role("menuitem").w_full().h(32.0).px(8.0).gap(8.0).center_y().radius(6.0).hover(p.hover)

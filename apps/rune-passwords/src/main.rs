@@ -1,6 +1,7 @@
 mod account;
 mod api;
 mod app;
+mod bridge;
 mod crypto;
 mod demo;
 mod generator;
@@ -17,6 +18,10 @@ mod worker;
 use rune::AppSpec;
 
 fn main() {
+    // Chromium starts the native-messaging host with the extension's origin.
+    if std::env::args().nth(1).is_some_and(|a| a.starts_with("chrome-extension://")) {
+        return bridge::host();
+    }
     // Matches assets/rune-passwords.desktop, so the dock shows the window with its icon.
     rune::set_app_id("rune-passwords");
     rune::prewarm_gpu();

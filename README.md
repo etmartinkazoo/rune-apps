@@ -21,7 +21,8 @@ pkg-config` on Ubuntu, `libxkbcommon-devel wayland-devel pkgconf` on Fedora).
 sudo apt-get install -y libxkbcommon-dev libwayland-dev pkg-config mold clang mesa-vulkan-drivers libssl-dev perl make gcc
 ```
 
-**Fedora 45:**
+**Fedora 45** (`scripts/install.sh` installs what's missing of these, and what each app needs to
+run, by itself):
 ```sh
 sudo dnf install -y libxkbcommon-devel wayland-devel pkgconf-pkg-config mold clang mesa-vulkan-drivers openssl-devel perl perl-IPC-Cmd perl-FindBin make gcc
 ```

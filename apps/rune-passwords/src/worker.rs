@@ -23,12 +23,8 @@ pub enum Cmd {
     Restore(String),
     Purge(String),
     Lock,
-    /// Signs the account in use out, moving to another kept one if there is one.
+    /// Signs this thread's account out and forgets it on this computer.
     SignOut,
-    /// Locks and moves to the kept account with this id.
-    Switch(String),
-    /// Locks and puts the account in use aside, for signing in to another.
-    AddAccount,
 }
 
 pub enum Event {
@@ -44,18 +40,18 @@ pub enum Event {
     Offline(String),
     Error(String),
     Locked,
-    /// No account is left.
+    /// This thread's account is signed out and forgotten.
     SignedOut,
-    /// Now on the kept account with this id, locked (after signing out of another).
-    Switched(String),
 }
 
-pub fn spawn(wake: Waker) -> (Sender<Cmd>, Receiver<Event>) {
+/// A vault thread for `account` (None: one that signs in to a new account). Each kept account
+/// has its own, so several can be open at once; the thread ends when its sender is dropped.
+pub fn spawn(wake: Waker, account: Option<Account>) -> (Sender<Cmd>, Receiver<Event>) {
     let (cmds, rx) = channel();
     let (tx, events) = channel();
     std::thread::Builder::new()
         .name("vault".into())
-        .spawn(move || Worker { events: tx, wake, account: account::active(), keys: None, client: None, sync: None }.run(rx))
+        .spawn(move || Worker { events: tx, wake, account, keys: None, client: None, sync: None }.run(rx))
         .expect("spawn the vault thread");
     (cmds, events)
 }
@@ -104,33 +100,7 @@ impl Worker {
                     if let Some(a) = self.account.take() {
                         account::forget(&a.id);
                     }
-                    match account::list().into_iter().next() {
-                        Some(next) => {
-                            let _ = account::set_active(&next.id);
-                            let id = next.id.clone();
-                            self.account = Some(next);
-                            self.send(Event::Switched(id));
-                        }
-                        None => self.send(Event::SignedOut),
-                    }
-                    Ok(())
-                }
-                Cmd::Switch(id) => {
-                    self.lock();
-                    self.client = None;
-                    match account::load(&id) {
-                        Some(a) => {
-                            let _ = account::set_active(&a.id);
-                            self.account = Some(a);
-                            Ok(())
-                        }
-                        None => Err("That account isn't kept on this computer any more".to_owned()),
-                    }
-                }
-                Cmd::AddAccount => {
-                    self.lock();
-                    self.client = None;
-                    self.account = None;
+                    self.send(Event::SignedOut);
                     Ok(())
                 }
             };
@@ -270,7 +240,7 @@ mod tests {
         account::use_scratch_dirs();
         let email = format!("w-{}@example.com", uuid::Uuid::new_v4().simple());
         api::register(&Server::new(&base).unwrap(), &email, "pw-1", crate::crypto::Kdf::Pbkdf2 { iterations: 100_000 }).unwrap();
-        let (cmds, events) = spawn(std::sync::Arc::new(|| {}));
+        let (cmds, events) = spawn(std::sync::Arc::new(|| {}), None);
         let next = || events.recv_timeout(std::time::Duration::from_secs(30)).expect("an answer");
         let vault = |e: Event| match e {
             Event::Vault(v) => v,
@@ -295,7 +265,7 @@ mod tests {
         assert_eq!(vault(next()).items[0].name, "Etsy", "then synced");
         cmds.send(Cmd::SignOut).unwrap();
         assert!(matches!(next(), Event::Locked));
-        assert!(matches!(next(), Event::SignedOut | Event::Switched(_)));
+        assert!(matches!(next(), Event::SignedOut));
         assert!(account::list().iter().all(|a| a.email != email_kept));
     }
 }

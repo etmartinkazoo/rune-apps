@@ -1,15 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <!-- Rune's dark app icon: a plain tile and one line glyph (Lucide, ISC) in the app's colour. -->
+  <!-- A silver frame, layered colour and a solid paper glyph, shared across the Rune family. -->
   <defs>
-    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2c2c2e"/>
-      <stop offset="1" stop-color="#1c1c1e"/>
+    <clipPath id="screen"><rect x="54" y="54" width="404" height="404" rx="28"/></clipPath>
+    <linearGradient id="frame" x2="0" y2="1">
+      <stop stop-color="#e4e6ec"/><stop offset="1" stop-color="#c5cad5"/>
     </linearGradient>
   </defs>
-  <rect x="32" y="32" width="448" height="448" rx="104" fill="url(#tile)"/>
-  <rect x="33.5" y="33.5" width="445" height="445" rx="102.5" fill="none" stroke="#ffffff" stroke-opacity="0.10" stroke-width="3"/>
-  <g transform="translate(136 136) scale(10)" color="#0a84ff" fill="none" stroke="currentColor"
-     stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-    <rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+  <rect x="32" y="40" width="448" height="448" rx="50" fill="#172033" opacity=".18"/>
+  <rect x="32" y="32" width="448" height="448" rx="50" fill="url(#frame)"/>
+  <g clip-path="url(#screen)">
+    <path fill="#608bdf" d="M54 54h404v404H54z"/>
+    <path fill="#4c74c2" d="M54 54h404v132C362 76 248 54 54 54Z"/>
+    <path fill="#456ab4" opacity=".30" d="M102 109 276 103 548 375V548H415L96 229Z"/>
+    <path fill="#86a7e8" d="M54 336c154-32 246 26 340 122H54Z"/>
+    <!-- Visible glyph bounds share a 96-unit inset and a 176-unit longest side. -->
+    <g transform="translate(10.8387 -14.7097) scale(.709677)">
+      <rect x="120" y="156" width="248" height="176" rx="24" fill="#edf0f6"/>
+      <path d="m132 172 96 72a26 26 0 0 0 32 0l96-72" fill="none" stroke="#608bdf" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
   </g>
 </svg>

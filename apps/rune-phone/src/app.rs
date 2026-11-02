@@ -147,6 +147,8 @@ pub struct App {
     pub to: TextEdit,
     pub dial: TextEdit,
     pub sending: bool,
+    /// The number and text being sent, shown in the conversation once the phone takes it.
+    pub outgoing: Option<(String, String)>,
     pub status: Option<(String, f64)>,
     pub clock: f64,
     /// The setup screen is open over a connected phone (to switch or pair).
@@ -193,6 +195,7 @@ pub fn init() -> App {
         to: TextEdit::new(""),
         dial: TextEdit::new(""),
         sending: false,
+        outgoing: None,
         status: None,
         clock: 0.0,
         setup_open: false,
@@ -346,6 +349,23 @@ impl App {
             }
             Event::Sent => {
                 self.sending = false;
+                // The phone lists a sent text only once it has gone out of its outbox, which can
+                // take a minute: show it now, until the listing has it.
+                if let Some((number, text)) = self.outgoing.take() {
+                    let at = chrono::Local::now().format("%Y%m%dT%H%M%S").to_string();
+                    self.messages.push(Message {
+                        id: format!("{LOCAL}{at}"),
+                        number,
+                        name: String::new(),
+                        text,
+                        at,
+                        incoming: false,
+                        read: true,
+                        mms: false,
+                        partial: false,
+                    });
+                    self.rethread();
+                }
                 self.draft = TextEdit::new("");
                 self.draft.focused = true;
             }
@@ -353,6 +373,7 @@ impl App {
             Event::Recents(r) => self.recents = r,
             Event::Error(e) => {
                 self.sending = false;
+                self.outgoing = None;
                 self.pairing = None;
                 self.say(e, tx);
             }
@@ -517,6 +538,11 @@ impl App {
                 n.partial = false;
             }
         }
+        // A text sent from here stays until the phone lists it among the sent.
+        let listed = |l: &Message| m.iter().any(|n| !n.incoming && n.text.trim() == l.text.trim() && number::key(&n.number) == number::key(&l.number));
+        let local: Vec<Message> = self.messages.iter().filter(|l| l.id.starts_with(LOCAL) && !listed(l)).cloned().collect();
+        m.extend(local);
+        m.sort_by(|a, b| a.at.cmp(&b.at));
         self.messages = m;
         self.rethread();
     }
@@ -582,6 +608,7 @@ impl App {
             return;
         }
         self.sending = true;
+        self.outgoing = Some((n.clone(), text.clone()));
         if self.pane == Pane::Compose {
             self.pane = Pane::Thread(number::key(&n));
         }
@@ -675,6 +702,9 @@ impl App {
 }
 
 /// "9:41 AM" today, "Yesterday", a weekday this week, else "31 Oct" (or with the year).
+/// The id of a sent text the phone hasn't listed yet.
+pub(crate) const LOCAL: &str = "local:";
+
 pub fn when(at: &str) -> String {
     let Ok(t) = chrono::NaiveDateTime::parse_from_str(at.get(..15).unwrap_or(at), "%Y%m%dT%H%M%S") else { return String::new() };
     let today = chrono::Local::now().date_naive();
@@ -694,6 +724,21 @@ mod tests {
 
     fn msg(id: &str, number: &str, text: &str, at: &str, incoming: bool) -> Message {
         Message { id: id.into(), number: number.into(), name: String::new(), text: text.into(), at: at.into(), incoming, read: !incoming, mms: false, partial: false }
+    }
+
+    #[test]
+    fn a_sent_text_shows_until_the_phone_lists_it() {
+        crate::settings::use_scratch_dirs();
+        let mut s = init();
+        s.outgoing = Some(("+1 555 010 0100".into(), "On my way".into()));
+        s.apply(Event::Sent, &mut Tx::default());
+        let key = number::key("+15550100100");
+        assert_eq!(s.thread(&key).map(|t| t.messages.len()), Some(1), "shown at once");
+        s.take_messages(vec![]);
+        assert_eq!(s.thread(&key).map(|t| t.messages.len()), Some(1), "kept while the phone has it in its outbox");
+        s.take_messages(vec![msg("m1", "5550100100", "On my way", "20261101T120000", false)]);
+        let t = s.thread(&key).unwrap();
+        assert_eq!((t.messages.len(), t.messages[0].id.as_str()), (1, "m1"), "the phone's copy takes its place");
     }
 
     #[test]

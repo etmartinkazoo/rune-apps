@@ -1,6 +1,8 @@
 //! The list: the category's items by name, each with its site's icon, name and username. A
 //! two-finger swipe left slides a row open on its buttons (`swipe.rs`).
 
+use std::rc::Rc;
+
 use rune::{Color, El, GrowthSpec, ScrollSpec, Tx, col, el, icon, row, text};
 
 use super::field::{input, platform_key};
@@ -41,13 +43,18 @@ pub fn view(s: &App, p: Palette) -> El {
         let note = if s.search.text.trim().is_empty() { "Nothing here" } else { "No matches" };
         col().w_full().grow(1.0).center().child(text(note).font(BODY).color(p.secondary))
     } else {
+        // The list's ids, worked out once a view: the rows look theirs up by index, rather than
+        // filtering the whole vault again for each one.
+        let ids: Rc<Vec<String>> = Rc::new(items.iter().map(|m| m.id.clone()).collect());
+        let (key_ids, row_ids) = (ids.clone(), ids.clone());
         let rows = col().key("rows").w_full().px(8.0).growth(GrowthSpec::default())
             .virtual_rows(
                 count,
                 ROW,
-                |s: &App, i| format!("item-{}", s.items().get(i).map_or("", |m| m.id.as_str())).into(),
-                move |s: &App, i| s.items().get(i).map_or_else(el, |m| item_row(s, m, p)),
-            );
+                move |_: &App, i| format!("item-{}", key_ids.get(i).map_or("", String::as_str)).into(),
+                move |s: &App, i| row_ids.get(i).and_then(|id| s.item(id)).map_or_else(el, |m| item_row(s, m, p)),
+            )
+            .virtual_rows_version(&*ids);
         col().key("list-scroll").w_full().grow(1.0).min_h(0.0).scroll(ScrollSpec { stick_bottom: false }).child(rows)
     };
     col().key("list").w(WIDTH).h_full().fill(p.content).gap(6.0)

@@ -451,9 +451,8 @@ pub fn init() -> App {
             s.send(Cmd::ClearStore { on: false });
         }
     }
-    if settings.storage.on {
-        s.restore(&tokens);
-    }
+    // The launch cache is kept whether or not offline mail is on.
+    s.restore(&tokens);
     s
 }
 
