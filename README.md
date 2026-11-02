@@ -47,6 +47,9 @@ scripts/install.sh --dock             # and pin them in GNOME's dock
 scripts/install.sh --remote beebox    # build on another machine over SSH and install here
 ```
 
+`scripts/install.sh` also installs the runtime packages each app needs (BlueZ/obexd, PipeWire,
+Secret Service), but only on Fedora 45; on other distributions each app's README lists them.
+
 With `--remote`, the other machine pulls this branch from GitHub and builds it, so push first.
 It needs a checkout at `~/Projects/rune-apps` and cargo through mise; `RUNE_REMOTE_DIR` and
 `RUNE_REMOTE_CARGO` change those. Its glibc must be no newer than this machine's for the

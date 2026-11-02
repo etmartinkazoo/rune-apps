@@ -13,7 +13,9 @@ with nothing to install on the phone: it uses the phone's own Bluetooth services
 
 ## What it needs
 
-- BlueZ with obexd running (the `obex` user service), for messages and contacts.
+- BlueZ with obexd, for messages and contacts: `bluez` plus `bluez-obex` on Arch,
+  `bluez-obexd` on Fedora and Debian/Ubuntu. obexd is D-Bus activated on first use; to keep it
+  running from login, `systemctl --user enable --now obex.service`.
 - PipeWire 1.4 or later with its Bluetooth telephony service (`org.pipewire.Telephony`, from
   WirePlumber), for calls.
 - The phone paired: open Rune Phone, choose **Look for phones** while the phone shows
