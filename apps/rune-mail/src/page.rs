@@ -712,6 +712,7 @@ td[valign=top i], th[valign=top i], tr[valign=top i] > td { vertical-align: top;
 td[valign=middle i], th[valign=middle i], tr[valign=middle i] > td { vertical-align: middle; }
 td[valign=bottom i], th[valign=bottom i], tr[valign=bottom i] > td { vertical-align: bottom; }
 img { max-width: 100% !important; }
+tr > td, tr > th { display: table-cell !important; }
 blockquote { margin: 0 0 0 4px; padding-left: 12px; border-left: 2px solid rgba(128, 128, 128, 0.45); }
 ";
 
@@ -785,6 +786,12 @@ fn legacy_attributes(doc: &mut HtmlDocument) {
                     }
                 }
                 _ => {}
+            }
+            // Blitz reads a hex bgcolor but not a named one ("white"); CSS takes either.
+            if let Some(c) = attr(local_name!("bgcolor")).filter(|c| c.chars().all(|ch| ch.is_ascii_alphabetic()))
+                && !has("background")
+            {
+                found.push((id, "background-color", c));
             }
             if let Some(bg) = attr(local_name!("background"))
                 && !has("background")
@@ -994,6 +1001,25 @@ mod tests {
         assert!(t.kept["t"].doc.get_selected_text().is_none_or(|s| s.is_empty()), "a click clears it");
     }
 
+    /// A cell made a block (`display: block !important`, as responsive mail templates do to
+    /// centre a column) stays a cell: Blitz laid it out with no height, so all the message
+    /// but its logo row was cut off. A named bgcolor paints, as a hex one does.
+    #[test]
+    fn a_cell_styled_as_a_block_still_shows() {
+        let (mut t, _rx) = thread();
+        let html = "<!DOCTYPE html><html><body style='margin:0'><table width='100%' cellpadding='0' cellspacing='0'>\
+            <tr><td style='height:40px'>logo</td></tr>\
+            <tr><td style='display: block !important; width: 300px; margin: 0 auto'>\
+            <table class='main' width='100%' bgcolor='white'><tr><td style='font-size:20px;line-height:20px'>\
+            line one<br>line two<br>line three<br>line four<br>line five</td></tr></table>\
+            </td></tr></table></body></html>";
+        t.show("b".into(), Arc::from(html), LOOK);
+        let k = &t.kept["b"];
+        assert!(k.height() >= 140.0, "the logo row and five lines: {}", k.height());
+        let (w, _, rgba) = t.kept.get_mut("b").unwrap().render(0).unwrap();
+        assert_eq!(pixel(&rgba, w, 200, 60)[..3], [255, 255, 255], "bgcolor=white paints white");
+    }
+
     /// How many times a tile has been painted.
     fn paints(tile: &Pixels) -> u64 {
         let debug = format!("{tile:?}");
@@ -1087,4 +1113,5 @@ mod tests {
         assert_eq!(data_url("data:text/plain,a%20b").as_deref(), Some(&b"a b"[..]));
     }
 }
+
 
