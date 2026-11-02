@@ -2,6 +2,8 @@
 //! with a phone connected over Hands-Free, PipeWire is its headset. Each phone shows up as an
 //! audio gateway that can dial; each call as an object to answer or hang up, whose audio
 //! PipeWire routes through this computer. It speaks oFono's interfaces, which this uses.
+// On macOS the phone thread is `macworker`; this is for Linux (and its tests).
+#![cfg_attr(target_os = "macos", allow(dead_code))]
 
 use std::collections::HashMap;
 

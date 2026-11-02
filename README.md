@@ -47,6 +47,11 @@ scripts/install.sh --dock             # and pin them in GNOME's dock
 scripts/install.sh --remote beebox    # build on another machine over SSH and install here
 ```
 
+On macOS each app goes into `/Applications` (or `~/Applications` if that isn't writable;
+`RUNE_APPLICATIONS` picks another folder) as a `.app` with its icon, and `~/.local/bin` links to
+the binary inside it. On macOS Rune Phone has texts, contacts and recent calls, but
+calls themselves stay on the phone.
+
 `scripts/install.sh` also installs the runtime packages each app needs (BlueZ/obexd, PipeWire,
 Secret Service), but only on Fedora 45; on other distributions each app's README lists them.
 

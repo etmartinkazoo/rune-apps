@@ -2,6 +2,8 @@
 //! session lists, reads and sends the phone's SMS and MMS (Android asks once whether to allow
 //! it), and a Phonebook Access session pulls its contacts and call history. Files move as
 //! transfers: obexd writes what it reads to a file, and sends what's in one.
+// On macOS the phone thread is `macworker`; this is for Linux (and its tests).
+#![cfg_attr(target_os = "macos", allow(dead_code))]
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

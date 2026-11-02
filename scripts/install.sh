@@ -147,6 +147,65 @@ print(json.dumps(policy, indent=2))' scripts/chromium-policy.json "$id" | root_f
 }
 
 bin="$HOME/.local/bin"
+
+# macOS: each app as a bundle in /Applications (~/Applications if that isn't writable), with its
+# icon made from the SVG, and ~/.local/bin/APP a link to the binary inside.
+if [ "$(uname)" = Darwin ]; then
+    apps_dir="${RUNE_APPLICATIONS:-/Applications}"
+    [ -w "$apps_dir" ] || apps_dir="$HOME/Applications"
+    mkdir -p "$bin" "$apps_dir"
+    work=$(mktemp -d)
+    trap 'rm -rf "$work"; [ -z "$remote" ] || rm -rf "$built"' EXIT
+    for a in $apps; do
+        name=$(sed -n 's/^Name=//p' "apps/$a/assets/$a.desktop" | head -n 1)
+        app="$apps_dir/$name.app"
+        # The SVG's tile fills 448 of its 512; macOS icons keep theirs to about 80% of the canvas.
+        sed 's|viewBox="0 0 512 512"|viewBox="-22 -22 556 556"|' "apps/$a/assets/$a.svg" > "$work/$a.svg"
+        set_dir="$work/$a.iconset"
+        mkdir -p "$set_dir"
+        for s in 16 32 128 256 512; do
+            sips -s format png -z $s $s "$work/$a.svg" --out "$set_dir/icon_${s}x${s}.png" >/dev/null
+            sips -s format png -z $((s * 2)) $((s * 2)) "$work/$a.svg" --out "$set_dir/icon_${s}x${s}@2x.png" >/dev/null
+        done
+        rm -rf "$app"
+        mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+        iconutil -c icns "$set_dir" -o "$app/Contents/Resources/$a.icns"
+        install -m 755 "$built/$a" "$app/Contents/MacOS/$a"
+        version=$(sed -n 's/^version = "\(.*\)"/\1/p' "apps/$a/Cargo.toml" | head -n 1)
+        # Why the app uses what macOS asks permission for; without it, macOS ends the app.
+        usage=
+        if [ "$a" = rune-phone ]; then
+            usage='    <key>NSBluetoothAlwaysUsageDescription</key><string>Rune Phone reaches your phone over Bluetooth for its texts, contacts and recent calls.</string>'
+        fi
+        cat > "$app/Contents/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key><string>$name</string>
+    <key>CFBundleDisplayName</key><string>$name</string>
+    <key>CFBundleIdentifier</key><string>io.brem.$a</string>
+    <key>CFBundleExecutable</key><string>$a</string>
+    <key>CFBundleIconFile</key><string>$a</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+    <key>CFBundleVersion</key><string>${version:-0.1.0}</string>
+    <key>CFBundleShortVersionString</key><string>${version:-0.1.0}</string>
+    <key>NSHighResolutionCapable</key><true/>
+$usage
+</dict>
+</plist>
+EOF
+        # A fresh bundle at the same path can keep the old (blank) icon in Finder and the Dock
+        # until Launch Services looks at it again.
+        touch "$app"
+        /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$app" 2>/dev/null || true
+        ln -sf "$app/Contents/MacOS/$a" "$bin/$a"
+        echo "Installed $app"
+    done
+    exit 0
+fi
+
 share="${XDG_DATA_HOME:-$HOME/.local/share}"
 desktop="$share/applications"
 icons="$share/icons/hicolor"

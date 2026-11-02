@@ -18,7 +18,10 @@ pub fn view(s: &App, p: Palette) -> El {
         .child(tab(s, Tab::Calls, "Calls", p))
         .child(tab(s, Tab::Contacts, "Contacts", p));
     let phone = s.link.phone.as_ref().map_or("No phone".to_owned(), |d| d.name.clone());
-    let (dot, state) = match (s.link.calls, s.link.messages) {
+    // On a Mac calls stay on the phone, so texts are all there is to connect: count calls as
+    // up exactly when texts are.
+    let calls = if cfg!(target_os = "macos") { s.link.messages } else { s.link.calls };
+    let (dot, state) = match (calls, s.link.messages) {
         (true, true) => (*style::GREEN, "Connected"),
         (true, false) | (false, true) => (*style::GREEN, "Partly connected"),
         _ if s.connecting => (p.tertiary, "Connecting…"),

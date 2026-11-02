@@ -1,5 +1,7 @@
 //! BlueZ on the system bus: the phones this computer knows, connecting one, and pairing a new
 //! one, with an agent that shows the six-digit code both screens must agree on.
+// On macOS the phone thread is `macworker`; this is for Linux (and its tests).
+#![cfg_attr(target_os = "macos", allow(dead_code))]
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

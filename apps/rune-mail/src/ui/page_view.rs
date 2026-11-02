@@ -12,11 +12,7 @@ const AHEAD: f32 = 1200.0;
 const SLOP: f32 = 3.0;
 
 pub fn view(s: &App, uid: &str) -> El {
-    let measured = col().key(format!("page-{uid}")).w_full().on_drawn_layout(|s: &mut App, r: [f32; 4]| {
-        if (r[2] - s.page_width).abs() >= 1.0 {
-            s.page_width = r[2];
-        }
-    });
+    let measured = col().key(format!("page-{uid}")).w_full();
     let Some(page) = s.pages.pages.get(uid) else {
         // Laid out in a few milliseconds; holds the reader's place till then.
         return measured.min_h(60.0);
