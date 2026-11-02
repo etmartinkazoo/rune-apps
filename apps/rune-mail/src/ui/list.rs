@@ -80,7 +80,7 @@ fn message_row(s: &App, i: usize, p: Palette) -> El {
     // The preview always takes its full height, empty or short, so every row is the same size.
     if lines > 0 {
         content = content.child(col().w_full().h(SMALL.line_px() * lines as f32)
-            .child(text(m.preview.clone()).font(SMALL).color(muted).wrap().max_lines(lines)));
+            .child(text(m.preview.clone()).font(SMALL).color(muted).wrap_anywhere().max_lines(lines)));
     }
 
     let fill = if selected {

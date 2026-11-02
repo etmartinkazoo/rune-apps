@@ -32,9 +32,10 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 pub type Result<T> = std::result::Result<T, String>;
 
 /// Just the headers the list uses (Gmail's full headers carry kilobytes of signatures), and
-/// the start of the text for the preview.
+/// the start of the text for the preview. A message of one part says how its text is encoded
+/// in its own headers: without CONTENT-TRANSFER-ENCODING its preview would be the base64.
 const LIST_FETCH: &str = "(UID FLAGS INTERNALDATE \
-    BODY.PEEK[HEADER.FIELDS (FROM TO CC SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES CONTENT-TYPE)] \
+    BODY.PEEK[HEADER.FIELDS (FROM TO CC SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES CONTENT-TYPE CONTENT-TRANSFER-ENCODING)] \
     BODY.PEEK[TEXT]<0.2048>)";
 
 pub struct Imap {
@@ -637,6 +638,35 @@ mod mime_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A one-part HTML message in base64, as an auto-reply sends it, seen through only the
+    /// headers the list fetches: its preview is the text, not the base64.
+    #[test]
+    fn a_base64_message_of_one_part_previews_its_text() {
+        use base64::Engine;
+        let html = "<div dir=\"ltr\"><p style=\"color:#000\">Thank you for your message. I am out of the office.</p></div>";
+        let body = base64::engine::general_purpose::STANDARD.encode(html);
+        let headers = [
+            "From: Jordan <jordan@example.com>",
+            "Subject: Out of Office",
+            "MIME-Version: 1.0",
+            "Content-Type: text/html; charset=\"UTF-8\"",
+            "Content-Transfer-Encoding: base64",
+            "X-Mailer: something the list doesn't ask for",
+        ];
+        let fields = LIST_FETCH.split_once("HEADER.FIELDS (").and_then(|(_, r)| r.split_once(')')).unwrap().0;
+        let fetched: Vec<&str> = fields.split_whitespace().collect();
+        let mut raw: String = headers
+            .iter()
+            .filter(|h| fetched.iter().any(|f| h.split(':').next().unwrap().eq_ignore_ascii_case(f)))
+            .map(|h| format!("{h}\r\n"))
+            .collect();
+        raw.push_str("\r\n");
+        raw.push_str(&body);
+        let msg = MessageParser::default().parse(raw.as_bytes()).unwrap();
+        let preview = msg.body_preview(240).unwrap_or_default();
+        assert!(preview.contains("Thank you for your message"), "preview: {preview}");
+    }
 
     #[test]
     fn typed_searches_stay_one_command() {
