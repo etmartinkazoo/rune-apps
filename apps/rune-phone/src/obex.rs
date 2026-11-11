@@ -140,6 +140,7 @@ pub async fn list(session: &Connection, map: &str, folder: &str, count: u16) -> 
         .iter()
         .map(|(path, p)| {
             let (name, number) = if incoming { (text(p, "Sender"), text(p, "SenderAddress")) } else { (text(p, "Recipient"), text(p, "RecipientAddress")) };
+            let number = crate::number::address(&number);
             Listed {
                 path: path.to_string(),
                 folder: folder.to_owned(),
@@ -149,7 +150,8 @@ pub async fn list(session: &Connection, map: &str, folder: &str, count: u16) -> 
                 at: text(p, "Timestamp"),
                 read: flag(p, "Read") || !incoming,
                 incoming,
-                mms: text(p, "Type") == "mms",
+                // MAP 1.3's instant messages ("im") come as MIME, like an MMS.
+                mms: matches!(text(p, "Type").as_str(), "mms" | "im"),
             }
         })
         .collect();

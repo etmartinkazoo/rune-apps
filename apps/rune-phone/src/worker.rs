@@ -77,7 +77,9 @@ impl From<&Listed> for Message {
             at: l.at.clone(),
             incoming: l.incoming,
             read: l.read,
-            mms: l.mms,
+            // Until it's read whole, a listed MMS with text (an RCS chat message, often) isn't
+            // shown as a photo.
+            mms: l.mms && l.preview.is_empty(),
             partial: l.mms || l.preview.chars().count() >= 250,
         }
     }

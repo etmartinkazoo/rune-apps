@@ -342,7 +342,9 @@ impl App {
                             m.text = text;
                         }
                         m.partial = false;
-                        m.mms |= attachment;
+                        // Listed as an MMS, which RCS chat messages can be too: only a real
+                        // attachment shows as one.
+                        m.mms = attachment;
                     }
                 }
                 self.rethread();

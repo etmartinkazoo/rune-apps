@@ -8,6 +8,15 @@ pub fn key(n: &str) -> String {
     digits[digits.len().saturating_sub(9)..].to_owned()
 }
 
+/// A number from how a phone addresses a message: RCS chats can come as `tel:+15550100123` or
+/// `sip:+15550100123@ims.mnc260.mcc310.3gppnetwork.org`, whose domain's digits aren't the number.
+pub fn address(a: &str) -> String {
+    let a = a.trim();
+    let lower = a.to_ascii_lowercase();
+    let Some(rest) = ["tel:", "sip:", "sips:"].iter().find_map(|s| lower.starts_with(s).then(|| &a[s.len()..])) else { return a.to_owned() };
+    rest.split(['@', ';']).next().unwrap_or("").to_owned()
+}
+
 #[cfg(test)]
 pub fn same(a: &str, b: &str) -> bool {
     let (a, b) = (key(a), key(b));
@@ -44,5 +53,8 @@ mod tests {
         assert_eq!(pretty("5550100123"), "(555) 010-0123");
         assert_eq!(pretty("+15550100123"), "+1 (555) 010-0123");
         assert_eq!(pretty("+44 7700 900123"), "+44 7700 900123");
+        assert_eq!(address("sip:+15550100123@ims.mnc260.mcc310.3gppnetwork.org"), "+15550100123");
+        assert_eq!(address("tel:+15550100123;phone-context=x"), "+15550100123");
+        assert_eq!(address("+1 555 010 0123"), "+1 555 010 0123");
     }
 }

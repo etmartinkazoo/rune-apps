@@ -7,8 +7,8 @@ with nothing to install on the phone: it uses the phone's own Bluetooth services
   or from the desktop notification), mute, keypad tones for menus, hang up. PipeWire carries the
   audio through this computer's speakers and microphone.
 - **Messages** over the Message Access Profile: conversations, reading, replying and new ones,
-  with a notification when a text arrives. SMS and MMS; RCS chats stay in Google Messages on the
-  phone (turn RCS off there to have everything here).
+  with a notification when a text arrives. SMS and MMS, and the RCS chat messages a phone hands
+  over as MMS (Pixels with Google Messages do); replies from here always go out as SMS.
 - **Contacts and recent calls** over the Phonebook Access Profile.
 
 ## What it needs
