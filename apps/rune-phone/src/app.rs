@@ -630,6 +630,10 @@ impl App {
     // Calls
 
     pub fn call(&mut self, n: &str, tx: &mut Tx) {
+        if cfg!(target_os = "macos") {
+            self.say("Calls stay on the phone on a Mac: macOS doesn't let apps carry call audio", tx);
+            return;
+        }
         if !self.link.calls {
             self.say("Calls need the phone connected over Bluetooth", tx);
             return;

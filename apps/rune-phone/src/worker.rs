@@ -1,6 +1,8 @@
 //! The thread that talks to the phone: BlueZ for the link and pairing, PipeWire for calls,
 //! obexd for messages and contacts. It runs them on a tokio runtime of its own and hands the
 //! window what it needs to show.
+// On macOS the phone thread is `macworker`; this is for Linux (and its tests).
+#![cfg_attr(target_os = "macos", allow(dead_code))]
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -120,6 +122,14 @@ pub struct Buses {
     pub session: Connection,
 }
 
+/// macOS has no BlueZ, obexd or PipeWire: its phone thread is `macworker`, with the same
+/// commands and events.
+#[cfg(target_os = "macos")]
+pub fn spawn(wake: Waker, phone: Option<String>) -> (UnboundedSender<Cmd>, std::sync::mpsc::Receiver<Event>) {
+    crate::macworker::spawn(wake, phone)
+}
+
+#[cfg(not(target_os = "macos"))]
 pub fn spawn(wake: Waker, phone: Option<String>) -> (UnboundedSender<Cmd>, std::sync::mpsc::Receiver<Event>) {
     let (cmds, rx) = unbounded_channel();
     let (tx, events) = std::sync::mpsc::channel();

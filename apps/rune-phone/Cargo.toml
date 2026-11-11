@@ -17,3 +17,10 @@ serde_json = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
 dirs = "5"
 base64 = "0.22"
+
+# macOS: IOBluetooth for the link, and the main thread it has to be called from.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-io-bluetooth = "0.3"
+dispatch2 = "0.3"

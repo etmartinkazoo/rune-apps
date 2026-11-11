@@ -280,8 +280,10 @@ pub struct App {
     pub refreshing: bool,
     /// Mail HTML laid out and painted off this thread (`page.rs`).
     pub pages: crate::page::Pages,
-    /// The reader column's width in points, as last drawn: what pages are laid out at.
-    pub page_width: f32,
+    /// The reader pane's width in points, as last drawn: each page's width follows from it
+    /// (see [`crate::ui::reader::page_width`]), so a page is laid out at its final width
+    /// before it first shows.
+    pub reader_width: f32,
     /// Device pixels per point and whether the system is dark, as the last view ran: the
     /// view knows them, and pages are asked for outside it.
     pub view_env: std::cell::Cell<(f32, bool)>,
@@ -396,7 +398,7 @@ pub fn init() -> App {
         body_failed: HashMap::new(),
         refreshing: false,
         pages: crate::page::Pages::new(),
-        page_width: 640.0,
+        reader_width: 900.0,
         view_env: std::cell::Cell::new((1.0, false)),
         remote_allowed: HashSet::new(),
         on_white: HashSet::new(),
@@ -836,32 +838,39 @@ impl App {
         let (scale, system_dark) = self.view_env.get();
         let dark = self.settings.dark(system_dark);
         let palette = crate::ui::style::Palette::new(dark);
-        let width = self.page_width.round().max(200.0) as u32;
         // What the reader shows: a lone message always, a conversation's open ones.
         let conversation = self.conversation();
         let single = conversation.len() == 1;
-        let mut wanted: Vec<String> =
-            conversation.iter().filter(|m| single || self.expanded.contains(&m.uid)).map(|m| m.uid.clone()).collect();
+        // Each with whether it shows alone or in a conversation, which sets its width.
+        let mut wanted: Vec<(String, bool)> = conversation
+            .iter()
+            .filter(|m| single || self.expanded.contains(&m.uid))
+            .map(|m| (m.uid.clone(), !single))
+            .collect();
         // The rows either side, laid out ahead so opening them shows at once.
         if let Some(i) = self.selected.as_ref().and_then(|s| self.messages.iter().position(|m| &m.uid == s)) {
             for j in [i + 1, i.wrapping_sub(1)] {
-                if let Some(m) = self.messages.get(j).and_then(|row| self.thread(row).last().map(|m| m.uid.clone())) {
-                    wanted.push(m);
+                if let Some(thread) = self.messages.get(j).map(|row| self.thread(row))
+                    && let Some(m) = thread.last()
+                {
+                    wanted.push((m.uid.clone(), thread.len() > 1));
                 }
             }
         }
         if !self.settings.render_html {
             wanted.clear();
         }
-        for uid in &wanted {
+        for (uid, in_conversation) in &wanted {
             let Some(body) = self.bodies.get(uid) else { continue };
             let (Some(doc), Some(src)) = (body.html.as_ref(), body.html_src.as_ref()) else { continue };
             let white = self.on_white.contains(uid);
             let ink = (dark && !doc.colored && !white).then(|| (rgba8(palette.text), rgba8(palette.accent)));
+            let backed = dark && (doc.colored || white);
+            let width = crate::ui::reader::page_width(self.reader_width, *in_conversation, backed).round().max(200.0) as u32;
             let look = crate::page::Look { width, scale, ink };
             self.pages.show(uid, src, look);
         }
-        let keep: HashSet<&str> = wanted.iter().map(String::as_str).collect();
+        let keep: HashSet<&str> = wanted.iter().map(|(uid, _)| uid.as_str()).collect();
         self.pages.keep(&keep);
     }
 

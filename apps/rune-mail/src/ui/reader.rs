@@ -24,11 +24,30 @@ pub const CARD_GAP: f32 = 16.0;
 const CARD_RADIUS: f32 = 10.0;
 /// Inside a card.
 const PAD: f32 = 20.0;
+/// The widest a message's body column gets, its padding included.
+const BODY_MAX: f32 = 900.0;
+/// Around a message shown on white in dark mode.
+const BACKING_PAD: f32 = 16.0;
+
+/// The width a message's HTML is laid out at, in a reader pane `reader` wide: alone or in a
+/// conversation (which has the map beside it), on a white backing or not. Worked out ahead
+/// rather than measured, so a page is laid out at the width it shows at before it first
+/// shows, and doesn't open wide then narrow. Keep in step with [`view`] and [`message`].
+pub fn page_width(reader: f32, in_conversation: bool, backed: bool) -> f32 {
+    let map = if in_conversation { MAP_WIDTH + 1.0 } else { 0.0 };
+    let card = reader - map - 2.0 * CARD_GAP;
+    let body = card.min(BODY_MAX) - 2.0 * PAD;
+    body - if backed { 2.0 * BACKING_PAD } else { 0.0 }
+}
 
 /// `height` is the pane's, last frame: a conversation leaves that much room below its last
 /// message, so moving with j/k can bring any message to the top.
 pub fn view(s: &App, height: f32, p: Palette) -> El {
-    let pane = col().key("reader").grow(1.0).min_w(0.0).h_full().fill(p.reader_bg);
+    let pane = col().key("reader").grow(1.0).min_w(0.0).h_full().fill(p.reader_bg).on_drawn_layout(|s: &mut App, r: [f32; 4]| {
+        if (r[2] - s.reader_width).abs() >= 1.0 {
+            s.reader_width = r[2];
+        }
+    });
     if !s.marked.is_empty() {
         let n = s.marked.len();
         let noun = match (s.settings.conversations, n == 1) {
@@ -281,7 +300,7 @@ fn message(s: &App, m: &Summary, single: bool, colors: &Colors, p: Palette) -> E
             let (_, paper) = Ink::for_doc(doc, white, p);
             let drawn = super::page_view::view(s, &m.uid);
             if paper && p.dark {
-                col().w_full().padding(16.0).radius(8.0).fill(Color::WHITE).child(drawn)
+                col().w_full().padding(BACKING_PAD).radius(8.0).fill(Color::WHITE).child(drawn)
             } else {
                 drawn
             }
@@ -299,7 +318,7 @@ fn message(s: &App, m: &Summary, single: bool, colors: &Colors, p: Palette) -> E
     if single {
         card = card.child(row().w_full().px(PAD).child(el().grow(1.0).h(1.0).fill(p.separator)));
     }
-    card = card.child(col().w_full().max_w(900.0).px(PAD).pt(if single { 18.0 } else { 4.0 }).pb(PAD).child(content));
+    card = card.child(col().w_full().max_w(BODY_MAX).px(PAD).pt(if single { 18.0 } else { 4.0 }).pb(PAD).child(content));
     match body.filter(|b| !b.files.is_empty()) {
         Some(b) => card.child(files(m, &b.files, p)),
         None => card,

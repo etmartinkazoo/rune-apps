@@ -226,7 +226,7 @@ fn keypad(s: &App, p: Palette) -> El {
                     s.dial = TextEdit::new(&t);
                 })
                 .child(text("⌫").font(KEY).color(p.secondary))))
-        .child(if s.link.calls { el() } else { text("Calls need the phone connected over Bluetooth").font(SMALL).color(p.secondary) })
+        .child(if s.link.calls { el() } else { text(if cfg!(target_os = "macos") { "Calls stay on the phone on a Mac" } else { "Calls need the phone connected over Bluetooth" }).font(SMALL).color(p.secondary) })
 }
 
 fn contact(s: &App, i: usize, p: Palette) -> El {
